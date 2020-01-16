@@ -6,7 +6,7 @@ namespace Crawler3WebsocketClient {
     public class CrawlerConfig
     {
         public string UrlFilter { get; set; }
-        public List<string> RequestQueue { get; set; }
+        public ICollection<string> RequestQueue { get; set; } = new List<string>();
         public bool CheckExternalLinks { get; set; }
         public bool FollowInternalLinks { get; set; }
         public long MaxRequestsPerCrawl { get; set; }
@@ -22,7 +22,7 @@ namespace Crawler3WebsocketClient {
         public string Url { get; set; }
         public string Title { get; set; }
         public bool External { get; set; }
-        public object Errors { get; set; } //TODO!
+        public string[] Errors { get; set; }
         public string HtmlSource { get; set; }
         public string Text { get; set; }
         public byte[] Screenshot { get; set; }

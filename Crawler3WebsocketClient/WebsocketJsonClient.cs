@@ -56,13 +56,25 @@ namespace Crawler3WebsocketClient {
             await SendAsync(message, cancellationToken);
         }
 
-        public Exception ReceiveAll(CancellationToken cancellationToken = default) => ReceiveAllAsync(cancellationToken).GetAwaiter().GetResult();
-        public async Task<Exception> ReceiveAllAsync(CancellationToken cancellationToken = default) {
+        public async Task<Exception> ReceiveAllAsync(int timeOutMsec = 1000 * 60 * 5, CancellationToken cancellationToken = default) {
             Exception lastException = null;
-            while (!cancellationToken.IsCancellationRequested) {
-                var (message, exception) = await ReceiveAsync(cancellationToken);
-                if (message == null || exception != null) {
+            var eot = false;
+            OnEot += () => eot = true;
+            while (!cancellationToken.IsCancellationRequested && !eot) {
+
+                using var cts = new CancellationTokenSource();
+                cts.CancelAfter(timeOutMsec);
+                using var combinedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+                var (message, exception) = await ReceiveAsync(combinedCancellationTokenSource.Token);
+
+                if (exception != null) {
                     lastException = exception;
+                    break;
+                }
+
+                if (message == null) {
+                    lastException = new Exception("empty message received");
                     break;
                 }
             }
@@ -107,7 +119,6 @@ namespace Crawler3WebsocketClient {
             return (null, ex);
         }
 
-        public event Action OnAck;
         public event Action OnEot;
         public event Action<CrawlerResponseEdge> OnEdge;
         public event Action<CrawlerResponseNode> OnNode;
@@ -124,7 +135,6 @@ namespace Crawler3WebsocketClient {
                 var responseBase = jt.ToObject<CrawlerResponseBase>(_serializer);
                 _logger.LogInfo($"Receiving message, type={responseBase.Type ?? "<null>"}");
                 switch (responseBase.Type) {
-                    case "ack": OnAck?.Invoke(); break;
                     case "eot": OnEot?.Invoke(); break;
                     case "edge": OnEdge?.Invoke(jt.ToObject<CrawlerResponseEdge>()); break;
                     case "node": OnNode?.Invoke(jt.ToObject<CrawlerResponseNode>()); break;

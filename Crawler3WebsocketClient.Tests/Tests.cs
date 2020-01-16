@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 
@@ -21,26 +22,31 @@ namespace Crawler3WebsocketClient.Tests {
 
             var client = new WebsocketJsonClient(_serverUrl, _logger);
 
-            await client.SendAsync(new CrawlerConfig {
-                CheckExternalLinks = false,
-                FollowInternalLinks = true,
-                MaxConcurrency = 2,
-                MaxRequestsPerCrawl = 999,
-                RequestQueue = new List<string> {
-                    "https://www.acolono.com/"
-                },
-                UrlFilter = "https://www.acolono.com/[.*]"
-            });
-
-            client.OnEdge += (e) => {
-                TestContext.WriteLine($"{e.Parent} >>[{e.Relation}]>> {e.Child}");
-            };
+            //client.OnEdge += (e) => {
+            //    TestContext.WriteLine($"{e.Parent} >>[{e.Relation}]>> {e.Child}");
+            //};
             client.OnNode += (e) => {
                 TestContext.WriteLine($"{e.Status} {e.Title}");
             };
 
             await client.ConnectAsync();
-            await client.ReceiveAllAsync();
+
+            await client.SendAsync(new CrawlerConfig {
+                CheckExternalLinks = false,
+                FollowInternalLinks = false,
+                MaxConcurrency = 2,
+                MaxRequestsPerCrawl = 10_9999,
+                RequestQueue = {
+                    "https://expired.badssl.com/",
+                    "https://html5test.com/",
+                    "https://ld.m.887.at/stream",
+                },
+                UrlFilter = "[.*]"
+            });
+
+
+            var ex = await client.ReceiveAllAsync();
+            Assert.IsNull(ex);
         }
     }
 }
