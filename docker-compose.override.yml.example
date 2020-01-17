@@ -1,0 +1,20 @@
+version: "2.2"
+services:
+  test_ui:
+    restart: always
+    environment:
+      CrawlerWebsocketUrl: "wss://username:password@host"
+    labels:
+      traefik.enable: "true"
+      traefik.protocol: "http"
+      traefik.docker.network: "web"
+      traefik.frontend.rule: "Host: example.com"
+      traefik.frontend.headers.customResponseHeaders: "X-Robots-Tag: noindex, nofollow, noarchive"
+      traefik.port: "80"
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
+
