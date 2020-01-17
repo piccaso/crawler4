@@ -1,10 +1,10 @@
 using System;
 using System.Text;
 
-namespace Crawler3WebsocketClient.Tests {
-    public class TestLogger : IWebsocketLogger {
+namespace Crawler3WebsocketClient {
+    public class LambdaLogger : IWebsocketLogger {
         private readonly Action<string> _writeLogLine;
-        public TestLogger(Action<string> writeLogLine) {
+        public LambdaLogger(Action<string> writeLogLine) {
             _writeLogLine = writeLogLine;
         }
 

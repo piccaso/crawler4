@@ -6,13 +6,13 @@ using NUnit.Framework;
 
 namespace Crawler3WebsocketClient.Tests {
     public class Tests {
-        private TestLogger _logger;
+        private LambdaLogger _logger;
         private Uri _serverUrl;
         [SetUp]
         public void Setup() {
             var conf = new TestConfiguration();
 
-            _logger = new TestLogger(TestContext.WriteLine);
+            _logger = new LambdaLogger(TestContext.WriteLine);
             _serverUrl = new Uri(conf["Url"]);
         }
 
