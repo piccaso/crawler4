@@ -1,0 +1,113 @@
+﻿@page "/crawler"
+@inject IConfiguration Configuration
+
+@using System.Threading
+@using Crawler3WebsocketClient
+@using Microsoft.Extensions.Configuration
+<h3>Crawler</h3>
+<p style="font-size: smaller; overflow: auto; max-height: 200px">
+    @foreach (var edge in _edges.Reverse()) {
+        if (!string.IsNullOrWhiteSpace(edge)) {
+            @edge
+            <br/>
+        }
+    }
+</p>
+<p style="font-size: smaller">Edges: @_edgesCount, Nodes: @_nodesCount</p>
+<input type="url" @bind="_queue" /> Url <br/>
+<input type="url" @bind="_filter" placeholder="@DefaultFilter" /> Filter
+<button @onclick="Go">Go</button>
+<button @onclick="Stop">Stop</button>
+<h3>@_title</h3>
+<p>@_url</p>
+<img style="width: 25%; height: auto" src="@_img"/>
+<p style="font-size: smaller">
+    @foreach (var log in _logs) {
+        if (!string.IsNullOrWhiteSpace(log)) {
+            @log
+            <br/>
+        }
+    }
+</p>
+
+@code {
+
+    ulong _edgesCount;
+    ulong _nodesCount;
+    string[] _logs = new string[0];
+    string _img;
+    string _title;
+    string _filter;
+    string DefaultFilter {
+        get {
+            if (!string.IsNullOrWhiteSpace(_queue)) return _queue + "[.*]";
+            return null;
+        }
+    }
+    string _url;
+    IList<string> _edges = new List<string>();
+    CancellationTokenSource _cts;
+
+    string _queue;
+    
+
+    protected override Task OnInitializedAsync() {
+        return Task.CompletedTask;
+    }
+
+    void Stop() {
+        _cts.CancelAfter(500);
+    }
+
+    async Task Go()
+    {
+        try {
+            _cts = new CancellationTokenSource();
+            _edges.Clear();
+            _edgesCount++;
+            _logs = new string[15];
+
+            var logCnt = 0;
+            var logger = new LambdaLogger((l) => {
+                _logs[++logCnt % _logs.Length] = l + "\n";
+            });
+            using var client = new WebsocketJsonClient(new Uri(Configuration["CrawlerWebsocketUrl"]), logger);
+
+            client.OnEdge += (e) => {
+                var msg = string.IsNullOrWhiteSpace(e.Relation) ? $"{e.Parent} -> {e.Child}" : $"{e.Parent} -[{e.Relation}]> {e.Child}";
+                _edges.Add(msg);
+                _edgesCount++;
+                StateHasChanged();
+            };
+
+            client.OnNode += (n) => {
+                if (n.Screenshot != null && n.Screenshot.Length > 0) {
+                    var encoded = Convert.ToBase64String(n.Screenshot);
+                    _img = "data:image/png;base64," + encoded;
+                }
+                _title = n.Title;
+                _url = n.Url;
+                _nodesCount++;
+                StateHasChanged();
+            };
+
+            if (string.IsNullOrWhiteSpace(_filter)) _filter = null;
+
+            await client.SendAsync(new CrawlerConfig()
+            {
+                CheckExternalLinks = false,
+                FollowInternalLinks = true,
+                MaxConcurrency = 1,
+                MaxRequestsPerCrawl = 500,
+                UrlFilter = _filter ?? DefaultFilter,
+                RequestQueue = {
+                    _queue
+                }
+            });
+            await client.ReceiveAllAsync(cancellationToken: _cts.Token);
+        }
+        catch (Exception e) {
+            _logs[0] = e.ToString();
+        }
+    }
+}

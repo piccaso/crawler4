@@ -13,7 +13,7 @@ namespace Crawler3WebsocketClient.Tests {
             var conf = new TestConfiguration();
 
             _logger = new LambdaLogger(TestContext.WriteLine);
-            _serverUrl = new Uri(conf["Url"]);
+            _serverUrl = new Uri(conf["CrawlerWebsocketUrl"]);
         }
 
         [Test]
