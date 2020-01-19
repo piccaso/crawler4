@@ -122,6 +122,7 @@ namespace Crawler3WebsocketClient {
         public event Action OnEot;
         public event Action<CrawlerResponseEdge> OnEdge;
         public event Action<CrawlerResponseNode> OnNode;
+        public event Action<CrawlerResponseStatus> OnStatus;
 
             
         private void ProcessMessage(string message) {
@@ -136,6 +137,7 @@ namespace Crawler3WebsocketClient {
                 _logger.LogInfo($"Receiving message, type={responseBase.Type ?? "<null>"}");
                 switch (responseBase.Type) {
                     case "eot": OnEot?.Invoke(); break;
+                    case "status": OnStatus?.Invoke(jt.ToObject<CrawlerResponseStatus>()); break;
                     case "edge": OnEdge?.Invoke(jt.ToObject<CrawlerResponseEdge>()); break;
                     case "node": OnNode?.Invoke(jt.ToObject<CrawlerResponseNode>()); break;
                     default: break;

@@ -9,6 +9,7 @@ namespace Crawler3WebsocketClient {
         public ICollection<string> RequestQueue { get; set; } = new List<string>();
         public bool CheckExternalLinks { get; set; }
         public bool FollowInternalLinks { get; set; }
+        public bool TakeScreenshots { get; set; }
         public long MaxRequestsPerCrawl { get; set; }
         public long MaxConcurrency { get; set; }
     }
@@ -33,5 +34,11 @@ namespace Crawler3WebsocketClient {
         public string Parent { get; set; }
         public string Child { get; set; }
         public string Relation { get; set; }
+    }
+
+    public class CrawlerResponseStatus : CrawlerResponseBase {
+        public ulong TotalRequestCount { get; set; }
+        public ulong HandledRequestCount { get; set; }
+        public ulong PendingRequestCount { get; set; }
     }
 }

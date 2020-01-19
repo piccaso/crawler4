@@ -13,14 +13,17 @@
         }
     }
 </p>
-<p style="font-size: smaller">Edges: @_edgesCount, Nodes: @_nodesCount</p>
+<p style="font-size: smaller">Edges: @_edgesCount, Nodes: @_nodesCount, Pending: @_pending</p>
+<input type="checkbox" @bind="_screenshots"/> Screenshots<br/>
 <input type="url" @bind="_queue" /> Url <br/>
 <input type="url" @bind="_filter" placeholder="@DefaultFilter" /> Filter
 <button @onclick="Go">Go</button>
 <button @onclick="Stop">Stop</button>
 <h3>@_title</h3>
 <p>@_url</p>
-<img style="width: 25%; height: auto" src="@_img"/>
+@if (!string.IsNullOrWhiteSpace(_img)) {
+    <img style="width: 25%; height: auto" src="@_img" />
+}
 <p style="font-size: smaller">
     @foreach (var log in _logs) {
         if (!string.IsNullOrWhiteSpace(log)) {
@@ -34,10 +37,12 @@
 
     ulong _edgesCount;
     ulong _nodesCount;
+    ulong _pending;
     string[] _logs = new string[0];
     string _img;
     string _title;
     string _filter;
+    bool _screenshots;
     string DefaultFilter {
         get {
             if (!string.IsNullOrWhiteSpace(_queue)) return _queue + "[.*]";
@@ -49,27 +54,32 @@
     CancellationTokenSource _cts;
 
     string _queue;
-    
+
 
     protected override Task OnInitializedAsync() {
         return Task.CompletedTask;
     }
 
     void Stop() {
-        _cts.CancelAfter(500);
+        _cts?.Cancel(false);
     }
 
     async Task Go()
     {
         try {
+            _cts?.Cancel(false);
             _cts = new CancellationTokenSource();
             _edges.Clear();
             _edgesCount++;
             _logs = new string[15];
 
             var logCnt = 0;
-            var logger = new LambdaLogger((l) => {
-                _logs[++logCnt % _logs.Length] = l + "\n";
+            var logger = new LambdaLogger(s => {
+                //_logs[++logCnt % _logs.Length] = s + "\n";
+            }, s => {
+                _logs[++logCnt % _logs.Length] = s + "\n";
+            }, s => {
+                _logs[++logCnt % _logs.Length] = s + "\n";
             });
             using var client = new WebsocketJsonClient(new Uri(Configuration["CrawlerWebsocketUrl"]), logger);
 
@@ -77,7 +87,19 @@
                 var msg = string.IsNullOrWhiteSpace(e.Relation) ? $"{e.Parent} -> {e.Child}" : $"{e.Parent} -[{e.Relation}]> {e.Child}";
                 _edges.Add(msg);
                 _edgesCount++;
+                while (_edges.Count > 500) {
+                    _edges.RemoveAt(0);
+                }
                 StateHasChanged();
+            };
+
+            client.OnStatus += (s) => {
+                _pending = s.PendingRequestCount;
+                StateHasChanged();
+            };
+
+            client.OnEot += () => {
+                _pending = 0;
             };
 
             client.OnNode += (n) => {
@@ -97,6 +119,7 @@
             {
                 CheckExternalLinks = false,
                 FollowInternalLinks = true,
+                TakeScreenshots = _screenshots,
                 MaxConcurrency = 1,
                 MaxRequestsPerCrawl = 500,
                 UrlFilter = _filter ?? DefaultFilter,
