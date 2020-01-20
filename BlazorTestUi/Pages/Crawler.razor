@@ -15,7 +15,7 @@
 </p>
 <p style="font-size: smaller">Edges: @_edgesCount, Nodes: @_nodesCount, Pending: @_pending, AvgProcessingTime: @($"{AvgPageLoadTime():0.00}")</p>
 <input type="checkbox" @bind="_screenshots"/> Screenshots<br/>
-<input type="number" min="0" max="6" @bind="_threads" /> Threads <br/>
+<input type="number" min="0" max="2" @bind="_threads" /> Threads <br/>
 <input type="url" @bind="_queue" /> Url <br/>
 <input type="url" @bind="_filter" placeholder="@DefaultFilter" /> Filter
 <button @onclick="Go">Go</button>
@@ -59,15 +59,9 @@
 
     string _queue;
 
-    Timer _timer;
-    void StatusChangedCb(object dummy = null) {
-        InvokeAsync(StateHasChanged);
-    }
-
-    protected override Task OnInitializedAsync() {
-        _timer = new Timer(StatusChangedCb, null, 0, 2000);
-        return Task.CompletedTask;
-    }
+    //protected override Task OnInitializedAsync() {
+    //    return base.OnInitializedAsync();
+    //}
 
     void Stop() {
         _cts?.Cancel(false);
@@ -106,12 +100,13 @@
             client.OnStatus += (s) => {
                 _pending = s.PendingRequestCount;
                 _nodesCount = s.HandledRequestCount;
-                StatusChangedCb();
+                InvokeAsync(StateHasChanged).GetAwaiter().GetResult();
             };
 
             client.OnEot += () => {
                 _pending = 0;
                 _lastUpdate = DateTimeOffset.UtcNow;
+                InvokeAsync(StateHasChanged).GetAwaiter().GetResult();
             };
 
             client.OnNode += (n) => {
@@ -123,6 +118,7 @@
                 _url = n.Url;
                 _nodesCount++;
                 _lastUpdate = DateTimeOffset.UtcNow;
+                InvokeAsync(StateHasChanged).GetAwaiter().GetResult();
             };
 
             if (string.IsNullOrWhiteSpace(_filter)) _filter = null;

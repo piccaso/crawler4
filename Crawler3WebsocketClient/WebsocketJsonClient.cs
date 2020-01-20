@@ -103,7 +103,10 @@ namespace Crawler3WebsocketClient {
                 bool endOfMessage;
                 do {
                     var result = await _socket.ReceiveAsync(segment, cancellationToken);
-                    if (result.MessageType != WebSocketMessageType.Text) return (null, ex);
+                    if (result.MessageType != WebSocketMessageType.Text) {
+                        _logger?.LogError($"Unsupported MessageType '{result.MessageType}'");
+                        return (null, ex);
+                    }
                     endOfMessage = result.EndOfMessage;
                     if (result.Count > 0) {
                         ms.Write(segment.AsSpan(0, result.Count));
