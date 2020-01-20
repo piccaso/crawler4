@@ -60,12 +60,12 @@
     string _queue;
 
     Timer _timer;
-    void TimerCb(object state) {
+    void StatusChangedCb(object dummy = null) {
         InvokeAsync(StateHasChanged);
     }
 
     protected override Task OnInitializedAsync() {
-        _timer = new Timer(TimerCb, null, 0, 2000);
+        _timer = new Timer(StatusChangedCb, null, 0, 2000);
         return Task.CompletedTask;
     }
 
@@ -106,6 +106,7 @@
             client.OnStatus += (s) => {
                 _pending = s.PendingRequestCount;
                 _nodesCount = s.HandledRequestCount;
+                StatusChangedCb();
             };
 
             client.OnEot += () => {

@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -17,6 +18,7 @@ namespace Crawler3WebsocketClient {
         private readonly Encoding _encoding;
         private readonly JsonSerializer _serializer;
         private ClientWebSocket _socket = new ClientWebSocket();
+        private readonly Channel<string> _jsonChannel = Channel.CreateUnbounded<string>();
         
         public WebsocketJsonClient(Uri socketUrl, IWebsocketLogger logger = null, ICredentials credentials = null, int bufferSize = 10_485_760, Encoding encoding = null, IWebProxy proxy = null) {
             _socketUrl = socketUrl;
@@ -57,6 +59,10 @@ namespace Crawler3WebsocketClient {
         }
 
         public async Task<Exception> ReceiveAllAsync(int timeOutMsec = 1000 * 60 * 5, CancellationToken cancellationToken = default) {
+            await ConnectAsync(cancellationToken);
+
+            var processingTask = Task.Run(async () => { await ProcessAsync(cancellationToken); }, cancellationToken);
+
             Exception lastException = null;
             var eot = false;
             OnEot += () => eot = true;
@@ -76,18 +82,20 @@ namespace Crawler3WebsocketClient {
                 if (message == null) {
                     lastException = new Exception("empty message received");
                     break;
+                } else {
+                    await _jsonChannel.Writer.WriteAsync(message, cancellationToken);
                 }
             }
+            if(lastException != null) _logger?.LogWarn("Exception on receive", lastException);
+            await processingTask;
             return lastException;
         }
 
 
-        internal (string message,Exception exception) Receive(CancellationToken cancellationToken = default) => ReceiveAsync(cancellationToken).GetAwaiter().GetResult();
         internal async Task<(string message,Exception exception)> ReceiveAsync(CancellationToken cancellationToken = default) {
 
             Exception ex = null;
             try {
-                await ConnectAsync(cancellationToken);
 
                 await using var ms = new MemoryStream();
                 var buffer = new byte[_bufferSize];
@@ -105,7 +113,6 @@ namespace Crawler3WebsocketClient {
                 ms.Seek(0, SeekOrigin.Begin);
 
                 var message = _encoding.GetString(ms.ToArray());
-                ProcessMessage(message);
 
                 return (message, ex);
             } catch (WebSocketException e) {
@@ -115,7 +122,6 @@ namespace Crawler3WebsocketClient {
             } catch (OperationCanceledException e) {
                 ex = e;
             }
-            _logger?.LogWarn("Exception on receive", ex);
             return (null, ex);
         }
 
@@ -124,7 +130,15 @@ namespace Crawler3WebsocketClient {
         public event Action<CrawlerResponseNode> OnNode;
         public event Action<CrawlerResponseStatus> OnStatus;
 
-            
+
+
+        private async Task ProcessAsync(CancellationToken ct) {
+            while (!ct.IsCancellationRequested) {
+                var message = await _jsonChannel.Reader.ReadAsync(ct);
+                ProcessMessage(message);
+            }
+        }
+
         private void ProcessMessage(string message) {
             if(message is null || message.Length < 3 || message[0] != '!') {
                 _logger?.LogInfo(message ?? "<null>");
