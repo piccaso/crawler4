@@ -59,8 +59,13 @@
 
     string _queue;
 
+    Timer _timer;
+    void TimerCb(object state) {
+        InvokeAsync(StateHasChanged);
+    }
 
     protected override Task OnInitializedAsync() {
+        _timer = new Timer(TimerCb, null, 0, 2000);
         return Task.CompletedTask;
     }
 
@@ -77,7 +82,8 @@
             _cts = new CancellationTokenSource();
             _edges.Clear();
             _logs.Clear();
-            _edgesCount++;
+            _edgesCount = 0;
+            _nodesCount = 0;
 
 
             var logger = new LambdaLogger(s => {
@@ -95,12 +101,11 @@
                 while (_edges.Count > 500) {
                     _edges.RemoveAt(0);
                 }
-                StateHasChanged();
             };
 
             client.OnStatus += (s) => {
                 _pending = s.PendingRequestCount;
-                StateHasChanged();
+                _nodesCount = s.HandledRequestCount;
             };
 
             client.OnEot += () => {
@@ -116,7 +121,6 @@
                 _title = n.Title;
                 _url = n.Url;
                 _nodesCount++;
-                StateHasChanged();
                 _lastUpdate = DateTimeOffset.UtcNow;
             };
 
@@ -134,10 +138,13 @@
                     _queue
                 }
             });
-            await client.ReceiveAllAsync(cancellationToken: _cts.Token);
+            var lastEx = await client.ReceiveAllAsync(cancellationToken: _cts.Token);
+            if (lastEx != null) {
+                _logs.Add("Client finished with Exception: " + lastEx);
+            }
         }
         catch (Exception e) {
-            _logs[0] = e.ToString();
+            _logs.Add(e.ToString());
         }
     }
 }

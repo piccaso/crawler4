@@ -18,7 +18,7 @@ namespace Crawler3WebsocketClient {
         private readonly JsonSerializer _serializer;
         private ClientWebSocket _socket = new ClientWebSocket();
         
-        public WebsocketJsonClient(Uri socketUrl, IWebsocketLogger logger = null, ICredentials credentials = null, int bufferSize = 5_242_880, Encoding encoding = null, IWebProxy proxy = null) {
+        public WebsocketJsonClient(Uri socketUrl, IWebsocketLogger logger = null, ICredentials credentials = null, int bufferSize = 10_485_760, Encoding encoding = null, IWebProxy proxy = null) {
             _socketUrl = socketUrl;
             _logger = logger;
             _bufferSize = bufferSize;
