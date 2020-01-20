@@ -13,8 +13,9 @@
         }
     }
 </p>
-<p style="font-size: smaller">Edges: @_edgesCount, Nodes: @_nodesCount, Pending: @_pending</p>
+<p style="font-size: smaller">Edges: @_edgesCount, Nodes: @_nodesCount, Pending: @_pending, AvgProcessingTime: @($"{AvgPageLoadTime():0.00}")</p>
 <input type="checkbox" @bind="_screenshots"/> Screenshots<br/>
+<input type="number" min="0" max="6" @bind="_threads" /> Threads <br/>
 <input type="url" @bind="_queue" /> Url <br/>
 <input type="url" @bind="_filter" placeholder="@DefaultFilter" /> Filter
 <button @onclick="Go">Go</button>
@@ -35,10 +36,13 @@
 
 @code {
 
+    DateTimeOffset _begin;
+    DateTimeOffset _lastUpdate;
+    int _threads = 1;
     ulong _edgesCount;
     ulong _nodesCount;
     ulong _pending;
-    string[] _logs = new string[0];
+    readonly IList<string> _logs = new List<string>();
     string _img;
     string _title;
     string _filter;
@@ -50,7 +54,7 @@
         }
     }
     string _url;
-    IList<string> _edges = new List<string>();
+    readonly IList<string> _edges = new List<string>();
     CancellationTokenSource _cts;
 
     string _queue;
@@ -64,22 +68,23 @@
         _cts?.Cancel(false);
     }
 
+    double AvgPageLoadTime() => (_lastUpdate - _begin).TotalMilliseconds / _nodesCount;
     async Task Go()
     {
         try {
             _cts?.Cancel(false);
+            _lastUpdate = _begin = DateTimeOffset.UtcNow;
             _cts = new CancellationTokenSource();
             _edges.Clear();
+            _logs.Clear();
             _edgesCount++;
-            _logs = new string[15];
 
-            var logCnt = 0;
+
             var logger = new LambdaLogger(s => {
-                //_logs[++logCnt % _logs.Length] = s + "\n";
-            }, s => {
-                _logs[++logCnt % _logs.Length] = s + "\n";
-            }, s => {
-                _logs[++logCnt % _logs.Length] = s + "\n";
+                _logs.Add(s);
+                while (_logs.Count > 30) {
+                    _logs.RemoveAt(0);
+                }
             });
             using var client = new WebsocketJsonClient(new Uri(Configuration["CrawlerWebsocketUrl"]), logger);
 
@@ -100,6 +105,7 @@
 
             client.OnEot += () => {
                 _pending = 0;
+                _lastUpdate = DateTimeOffset.UtcNow;
             };
 
             client.OnNode += (n) => {
@@ -111,6 +117,7 @@
                 _url = n.Url;
                 _nodesCount++;
                 StateHasChanged();
+                _lastUpdate = DateTimeOffset.UtcNow;
             };
 
             if (string.IsNullOrWhiteSpace(_filter)) _filter = null;
@@ -120,7 +127,7 @@
                 CheckExternalLinks = false,
                 FollowInternalLinks = true,
                 TakeScreenshots = _screenshots,
-                MaxConcurrency = 1,
+                MaxConcurrency = _threads,
                 MaxRequestsPerCrawl = 500,
                 UrlFilter = _filter ?? DefaultFilter,
                 RequestQueue = {
