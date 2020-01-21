@@ -35,8 +35,14 @@ namespace TestCli {
             };
             client.OnEot += () => { WriteLine("Done"); };
 
-            client.OnNode += (n) => { db.StoreNode(crawlId, n); };
-            client.OnEdge += (e) => { db.StoreEdge(crawlId, e); };
+            client.OnNode += (n) => {
+                db.StoreNode(crawlId, n); 
+                WriteLine($"N {n.Url}");
+            };
+            //client.OnEdge += (e) => {
+            //    db.StoreEdge(crawlId, e); 
+            //    WriteLine($"E {e.Parent} -> {e.Child}");
+            //};
             
             
             await client.SendAsync(new CrawlerConfig {

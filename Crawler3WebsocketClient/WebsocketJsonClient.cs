@@ -66,10 +66,10 @@ namespace Crawler3WebsocketClient {
             });
 
             Exception lastException = null;
+            var eot = false;
+            OnEot += () => eot = true;
+
             var receiveLoopTask = Task.Run(async () => {
-                
-                var eot = false;
-                OnEot += () => eot = true;
                 while (!cancellationToken.IsCancellationRequested && !eot) {
 
                     using var cts = new CancellationTokenSource();
@@ -91,13 +91,15 @@ namespace Crawler3WebsocketClient {
                     }
                 }
                 _jsonChannel.Writer.Complete();
-                if (lastException != null && !eot) {
-                    _logger?.LogError("Exception on receive", lastException);
-                }
             });
 
             await receiveLoopTask;
             await processingTask;
+
+            if (lastException != null && !eot) {
+                _logger?.LogError("Exception on receive", lastException);
+            }
+
             return lastException;
         }
 
