@@ -11,5 +11,6 @@ namespace Crawler3WebsocketClient.Tests {
         }
 
         public string this[string key] => _config[key];
+        public string CrawlerWebsocketUrl => _config["CrawlerWebsocketUrl"];
     }
 }

@@ -61,32 +61,42 @@ namespace Crawler3WebsocketClient {
         public async Task<Exception> ReceiveAllAsync(int timeOutMsec = 1000 * 60 * 5, CancellationToken cancellationToken = default) {
             await ConnectAsync(cancellationToken);
 
-            var processingTask = Task.Run(async () => { await ProcessAsync(cancellationToken); }, cancellationToken);
+            var processingTask = Task.Run(async () => {
+                await ProcessAsync(cancellationToken);
+            });
 
             Exception lastException = null;
-            var eot = false;
-            OnEot += () => eot = true;
-            while (!cancellationToken.IsCancellationRequested && !eot) {
+            var receiveLoopTask = Task.Run(async () => {
+                
+                var eot = false;
+                OnEot += () => eot = true;
+                while (!cancellationToken.IsCancellationRequested && !eot) {
 
-                using var cts = new CancellationTokenSource();
-                cts.CancelAfter(timeOutMsec);
-                using var combinedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+                    using var cts = new CancellationTokenSource();
+                    cts.CancelAfter(timeOutMsec);
+                    using var combinedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
 
-                var (message, exception) = await ReceiveAsync(combinedCancellationTokenSource.Token);
+                    var (message, exception) = await ReceiveAsync(combinedCancellationTokenSource.Token);
 
-                if (exception != null) {
-                    lastException = exception;
-                    break;
+                    if (exception != null) {
+                        lastException = exception;
+                        break;
+                    }
+
+                    if (message == null) {
+                        lastException = new Exception("empty message received");
+                        break;
+                    } else {
+                        await _jsonChannel.Writer.WriteAsync(message, cancellationToken);
+                    }
                 }
-
-                if (message == null) {
-                    lastException = new Exception("empty message received");
-                    break;
-                } else {
-                    await _jsonChannel.Writer.WriteAsync(message, cancellationToken);
+                _jsonChannel.Writer.Complete();
+                if (lastException != null && !eot) {
+                    _logger?.LogError("Exception on receive", lastException);
                 }
-            }
-            if(lastException != null) _logger?.LogWarn("Exception on receive", lastException);
+            });
+
+            await receiveLoopTask;
             await processingTask;
             return lastException;
         }
@@ -133,12 +143,11 @@ namespace Crawler3WebsocketClient {
         public event Action<CrawlerResponseNode> OnNode;
         public event Action<CrawlerResponseStatus> OnStatus;
 
-
-
         private async Task ProcessAsync(CancellationToken ct) {
             while (!ct.IsCancellationRequested) {
                 var message = await _jsonChannel.Reader.ReadAsync(ct);
                 ProcessMessage(message);
+                if(_jsonChannel.Reader.Completion.IsCompleted) break;
             }
         }
 
