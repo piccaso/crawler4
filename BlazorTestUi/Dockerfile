@@ -7,14 +7,17 @@ EXPOSE 443
 
 FROM mcr.microsoft.com/dotnet/core/sdk:3.1-buster AS build
 WORKDIR /src
-COPY ["BlazorTestUi/BlazorTestUi.csproj", "BlazorTestUi/"]
-RUN dotnet restore "BlazorTestUi/BlazorTestUi.csproj"
+COPY ["*.sln", "./"]
+COPY ["*/*.csproj", "./"]
+RUN for file in $(ls *.csproj); do mkdir -p ${file%.*}/ && mv $file ${file%.*}/; done
+RUN dotnet restore
 COPY . .
 WORKDIR "/src/BlazorTestUi"
-RUN dotnet build "BlazorTestUi.csproj" -c Release -o /app/build
+## Why Build?
+# RUN dotnet build --no-restore "BlazorTestUi.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "BlazorTestUi.csproj" -c Release -o /app/publish
+RUN dotnet publish --no-restore "BlazorTestUi.csproj" -c Release -o /app/publish
 
 FROM base AS final
 WORKDIR /app
