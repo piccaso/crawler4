@@ -9,7 +9,7 @@ namespace Crawler3WebsocketClient {
         public ICollection<string> RequestQueue { get; set; } = new List<string>();
         public bool CheckExternalLinks { get; set; }
         public bool FollowInternalLinks { get; set; }
-        public bool TakeScreenshots { get; set; }
+        public bool TakeScreenShots { get; set; }
         public long MaxRequestsPerCrawl { get; set; }
         public long MaxConcurrency { get; set; }
     }
@@ -26,14 +26,18 @@ namespace Crawler3WebsocketClient {
         public string[] Errors { get; set; }
         public string HtmlSource { get; set; }
         public string Text { get; set; }
-        public byte[] Screenshot { get; set; }
+        public byte[] ScreenShot { get; set; }
         public double LoadTime { get; set; }
     }
 
-    public class CrawlerResponseEdge : CrawlerResponseBase {
+    public class CrawlerResponseEdge {
         public string Parent { get; set; }
         public string Child { get; set; }
         public string Relation { get; set; }
+    }
+
+    public class CrawlerResponseEdges : CrawlerResponseBase {
+        public ICollection<CrawlerResponseEdge> Edges { get; set; }
     }
 
     public class CrawlerResponseStatus : CrawlerResponseBase {

@@ -13,9 +13,9 @@
         }
     }
 </p>
-<p style="font-size: smaller">Edges: @_edgesCount, Nodes: @_nodesCount, Pending: @_pending, AvgProcessingTime: @($"{AvgPageLoadTime():0.00}")</p>
-<input type="checkbox" @bind="_screenshots"/> Screenshots<br/>
-<input type="number" min="0" max="2" @bind="_threads" /> Threads <br/>
+<p style="font-size: smaller">Edges: @_edgesCount, Nodes: @_nodesCount, Pending: @_pending, AvgProcessingTime: @($"{AvgPageLoadTime():0.00}")sec/page</p>
+<input type="checkbox" @bind="_screenshots"/> ScreenShots<br/>
+<input type="number" min="0" max="6" @bind="_threads" /> Threads <br/>
 <input type="url" @bind="_queue" /> Url <br/>
 <input type="url" @bind="_filter" placeholder="@DefaultFilter" /> Filter
 <button @onclick="Go">Go</button>
@@ -64,14 +64,19 @@
     //}
 
     void Stop() {
-        _cts?.Cancel(false);
+        try {
+            _cts?.Cancel(false);
+        }
+        catch {
+            // to bad
+        }
     }
 
     double AvgPageLoadTime() => (_lastUpdate - _begin).TotalMilliseconds / _nodesCount;
     async Task Go()
     {
         try {
-            _cts?.Cancel(false);
+            Stop();
             _lastUpdate = _begin = DateTimeOffset.UtcNow;
             _cts = new CancellationTokenSource();
             _edges.Clear();
@@ -88,12 +93,14 @@
             });
             using var client = new WebsocketJsonClient(new Uri(Configuration["CrawlerWebsocketUrl"]), logger);
 
-            client.OnEdge += (e) => {
-                var msg = string.IsNullOrWhiteSpace(e.Relation) ? $"{e.Parent} -> {e.Child}" : $"{e.Parent} -[{e.Relation}]> {e.Child}";
-                _edges.Add(msg);
-                _edgesCount++;
-                while (_edges.Count > 500) {
-                    _edges.RemoveAt(0);
+            client.OnEdges += (es) => {
+                foreach (var e in es.Edges) {
+                    var msg = string.IsNullOrWhiteSpace(e.Relation) ? $"{e.Parent} -> {e.Child}" : $"{e.Parent} -[{e.Relation}]> {e.Child}";
+                    _edges.Add(msg);
+                    _edgesCount++;
+                    while (_edges.Count > 500) {
+                        _edges.RemoveAt(0);
+                    }
                 }
             };
 
@@ -110,8 +117,8 @@
             };
 
             client.OnNode += (n) => {
-                if (n.Screenshot != null && n.Screenshot.Length > 0) {
-                    var encoded = Convert.ToBase64String(n.Screenshot);
+                if (n.ScreenShot != null && n.ScreenShot.Length > 0) {
+                    var encoded = Convert.ToBase64String(n.ScreenShot);
                     _img = "data:image/png;base64," + encoded;
                 }
                 _title = n.Title;
@@ -127,7 +134,7 @@
             {
                 CheckExternalLinks = false,
                 FollowInternalLinks = true,
-                TakeScreenshots = _screenshots,
+                TakeScreenShots = _screenshots,
                 MaxConcurrency = _threads,
                 MaxRequestsPerCrawl = 500,
                 UrlFilter = _filter ?? DefaultFilter,

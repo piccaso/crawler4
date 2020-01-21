@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Text;
-using System.Threading;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Crawler3WebsocketClient;
 using Crawler3WebsocketClient.Tests;
@@ -22,40 +21,60 @@ namespace TestCli {
 
         static async Task AsyncMain() {
             var settings = new TestConfiguration();
-            var logger = new LambdaLogger(null, WriteLine, WriteLine);
-            using var client = new WebsocketJsonClient(new Uri(settings.CrawlerWebsocketUrl), logger);
+            var logger = new LambdaLogger(WriteLine);
+            
             using var db = new Db("test.db");
-            var baseUrl = "https://ld.m.887.at/p/";
-            var crawlId = db.NewCrawl(baseUrl);
-
-            WriteLine($"{crawlId}: {baseUrl}");
-
-            client.OnStatus += (s) => {
-                WriteLine($"pending: {s.PendingRequestCount}, handled: {s.HandledRequestCount}");
-            };
-            client.OnEot += () => { WriteLine("Done"); };
-
-            client.OnNode += (n) => {
-                db.StoreNode(crawlId, n); 
-                WriteLine($"N {n.Url}");
-            };
-            //client.OnEdge += (e) => {
-            //    db.StoreEdge(crawlId, e); 
-            //    WriteLine($"E {e.Parent} -> {e.Child}");
-            //};
-            
-            
-            await client.SendAsync(new CrawlerConfig {
+            //var baseUrl = "https://ld.m.887.at/p/";
+            var baseUrl = "https://www.ichkoche.at/";
+            //var baseUrl = "https://www.acolono.com/";
+            //var baseUrl = "https://orf.at/";
+            var crawlerConfig = new CrawlerConfig {
                 CheckExternalLinks = false,
                 FollowInternalLinks = true,
-                MaxConcurrency = 2,
-                MaxRequestsPerCrawl = 10,
-                TakeScreenshots = false,
+                MaxConcurrency = 8,
+                MaxRequestsPerCrawl = 500,
+                TakeScreenShots = false,
                 RequestQueue = {baseUrl},
                 UrlFilter = $"{baseUrl}[.*]",
-            });
+            };
+            var crawlId = db.NewCrawl(baseUrl);
+            var eot = false;
+            while (!eot) {
+                try {
+                    WriteLine($"{crawlId}: {baseUrl}");
+                    var purge = db.PurgeCrawl(crawlId);
+                    WriteLine("Purge Count: " + purge);
+                    using var client = new WebsocketJsonClient(new Uri(settings.CrawlerWebsocketUrl), logger);
+                    var crawlSw = new Stopwatch();
+                    crawlSw.Start();
 
-            await client.ReceiveAllAsync();
+                    client.OnStatus += (s) => {
+                        var avgPageSpeed = crawlSw.Elapsed.TotalSeconds / s.HandledRequestCount;
+                        WriteLine($"pending: {s.PendingRequestCount}, handled: {s.HandledRequestCount}, buff: {client.JsonChannelSize}, avgSecondsPerPage:{avgPageSpeed:0.000}sec");
+                    };
+                    client.OnEot += () => {
+                        WriteLine("Done");
+                        eot = true;
+                    };
+
+                    client.OnNode += (n) => {
+                        db.StoreNodes(crawlId, n);
+                        WriteLine($"LoadTime: {n.LoadTime:0.000}sec - {n.Url}");
+                    };
+                    client.OnEdges += (e) => {
+                        db.StoreEdges(crawlId, e.Edges);
+                    };
+
+                    await client.SendAsync(crawlerConfig);
+
+                    await client.ReceiveAllAsync();
+                }
+                catch (Exception e) {
+                    WriteLine(e);
+                    await Task.Delay(5000);
+                    //crawlerConfig.MaxConcurrency = 1;
+                }
+            }
         }
     }
 }
