@@ -113,6 +113,8 @@
             client.OnEot += () => {
                 _pending = 0;
                 _lastUpdate = DateTimeOffset.UtcNow;
+                _title = "Done";
+                _url = null;
                 InvokeAsync(StateHasChanged).GetAwaiter().GetResult();
             };
 
