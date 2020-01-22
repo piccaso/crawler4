@@ -24,8 +24,8 @@ namespace TestCli {
             var logger = new LambdaLogger(WriteLine);
             
             using var db = new Db("test.db");
-            //var baseUrl = "https://ld.m.887.at/p/";
-            var baseUrl = "https://www.ichkoche.at/";
+            var baseUrl = "https://ld.m.887.at/p/";
+            //var baseUrl = "https://www.ichkoche.at/";
             //var baseUrl = "https://www.acolono.com/";
             //var baseUrl = "https://orf.at/";
             var crawlerConfig = new CrawlerConfig {

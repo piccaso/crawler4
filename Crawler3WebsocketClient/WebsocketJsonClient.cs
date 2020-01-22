@@ -6,20 +6,17 @@ using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
 
 namespace Crawler3WebsocketClient {
     public class WebsocketJsonClient : IDisposable {
         private readonly Uri _socketUrl;
         private readonly IWebsocketLogger _logger;
         private readonly Encoding _encoding;
-        private readonly JsonSerializer _serializer;
         private ClientWebSocket _socket = new ClientWebSocket();
         private readonly byte[] _socketBuffer;
         private readonly Channel<byte[]> _jsonChannel = Channel.CreateUnbounded<byte[]>();
         private long _jsonChannelSize;
+        private readonly JsonProcessor _jsonProcessor;
         public long JsonChannelSize => Interlocked.Read(ref _jsonChannelSize);
 
         public WebsocketJsonClient(Uri socketUrl, IWebsocketLogger logger = null, ICredentials credentials = null, int bufferSize = 1024 * 5, Encoding encoding = null, IWebProxy proxy = null) {
@@ -33,9 +30,11 @@ namespace Crawler3WebsocketClient {
                 var split = _socketUrl.UserInfo.Split(':');
                 if(split.Length == 2) _socket.Options.Credentials = new NetworkCredential(Uri.UnescapeDataString(split[0]), Uri.UnescapeDataString(split[1]));
             }
-            _serializer = JsonSerializer.CreateDefault();
-            _serializer.ContractResolver = new CamelCasePropertyNamesContractResolver();
-            _serializer.NullValueHandling = NullValueHandling.Ignore;
+            _jsonProcessor = new JsonProcessor(_logger);
+            _jsonProcessor.OnEot += () => OnEot?.Invoke();
+            _jsonProcessor.OnEdges += (e) => OnEdges?.Invoke(e);
+            _jsonProcessor.OnNode += (n) => OnNode?.Invoke(n);
+            _jsonProcessor.OnStatus += (s) => OnStatus?.Invoke(s);
         }
 
         public void Connect(CancellationToken cancellationToken = default) => ConnectAsync(cancellationToken).GetAwaiter().GetResult();
@@ -56,7 +55,7 @@ namespace Crawler3WebsocketClient {
 
         public void Send(CrawlerConfig config, CancellationToken cancellationToken = default) => SendAsync(config, cancellationToken).GetAwaiter().GetResult();
         public async Task SendAsync(CrawlerConfig config, CancellationToken cancellationToken = default) {
-            var message = JToken.FromObject(config, _serializer).ToString();
+            var message = _jsonProcessor.Serialize(config);
             await SendAsync(message, cancellationToken);
         }
 
@@ -148,31 +147,9 @@ namespace Crawler3WebsocketClient {
                 if (_jsonChannel.Reader.TryRead(out var messageBytes)) {
                     Interlocked.Decrement(ref _jsonChannelSize);
                     var message = _encoding.GetString(messageBytes);
-                    ProcessMessage(message);
+                    _jsonProcessor.ProcessMessage(message);
                 }
             }
-        }
-
-        private void ProcessMessage(string message) {
-            if(message is null || message.Length < 3 || message[0] != '!') {
-                _logger?.LogInfo(message ?? "<null>");
-                return;
-            }
-            message = message.TrimStart('!');
-            try {
-                var jt = JToken.Parse(message);
-                var responseBase = jt.ToObject<CrawlerResponseBase>(_serializer);
-                //_logger.LogInfo($"Receiving message, type={responseBase.Type ?? "<null>"}");
-                switch (responseBase.Type) {
-                    case "eot": OnEot?.Invoke(); break;
-                    case "status": OnStatus?.Invoke(jt.ToObject<CrawlerResponseStatus>()); break;
-                    case "edges": OnEdges?.Invoke(jt.ToObject<CrawlerResponseEdges>()); break;
-                    case "node": OnNode?.Invoke(jt.ToObject<CrawlerResponseNode>()); break;
-                    default: break;
-                }
-            }
-            catch (JsonReaderException ex) {_logger?.LogWarn($"invalid json: {message}", ex);}
-            catch (JsonSerializationException ex) {_logger?.LogWarn($"invalid json: {message}", ex);}
         }
 
         /// <inheritdoc />
