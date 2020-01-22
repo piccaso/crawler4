@@ -15,7 +15,7 @@ namespace Crawler3WebsocketClient {
         }
 
         public string Serialize(object o) {
-            return JToken.FromObject(o, _serializer).ToString();
+            return JToken.FromObject(o, _serializer).ToString(Formatting.None);
         }
 
         public event Action OnEot;

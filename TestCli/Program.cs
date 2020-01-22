@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using Crawler3WebsocketClient;
 using Crawler3WebsocketClient.Tests;
@@ -20,12 +21,20 @@ namespace TestCli {
         }
 
         static async Task AsyncMain() {
+
+            var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (sender, e) => {
+                if (cts.IsCancellationRequested) return;
+                cts.Cancel(false);
+                e.Cancel = true;
+            };
+
             var settings = new TestConfiguration();
             var logger = new LambdaLogger(WriteLine);
             
             using var db = new Db("test.db");
-            var baseUrl = "https://ld.m.887.at/p/";
-            //var baseUrl = "https://www.ichkoche.at/";
+            //var baseUrl = "https://ld.m.887.at/p/";
+            var baseUrl = "https://www.ichkoche.at/";
             //var baseUrl = "https://www.acolono.com/";
             //var baseUrl = "https://orf.at/";
             var crawlerConfig = new CrawlerConfig {
@@ -33,13 +42,13 @@ namespace TestCli {
                 FollowInternalLinks = true,
                 MaxConcurrency = 8,
                 MaxRequestsPerCrawl = 500,
-                TakeScreenShots = false,
+                TakeScreenShots = true,
                 RequestQueue = {baseUrl},
                 UrlFilter = $"{baseUrl}[.*]",
             };
             var crawlId = db.NewCrawl(baseUrl);
             var eot = false;
-            while (!eot) {
+            while (!eot && !cts.Token.IsCancellationRequested) {
                 try {
                     WriteLine($"{crawlId}: {baseUrl}");
                     var purge = db.PurgeCrawl(crawlId);
@@ -65,14 +74,13 @@ namespace TestCli {
                         db.StoreEdges(crawlId, e.Edges);
                     };
 
-                    await client.SendAsync(crawlerConfig);
-
-                    await client.ReceiveAllAsync();
+                    await client.SendAsync(crawlerConfig, cts.Token);
+                    await client.ReceiveAllAsync(cancellationToken: cts.Token);
                 }
                 catch (Exception e) {
                     WriteLine(e);
                     await Task.Delay(5000);
-                    //crawlerConfig.MaxConcurrency = 1;
+                    crawlerConfig.MaxConcurrency = 1;
                 }
             }
         }

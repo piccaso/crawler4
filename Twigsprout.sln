@@ -9,7 +9,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Crawler3WebsocketClient", "
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Crawler3WebsocketClient.Tests", "Crawler3WebsocketClient.Tests\Crawler3WebsocketClient.Tests.csproj", "{28F59936-37E9-41F8-B354-6271967E1588}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestCli", "TestCli\TestCli.csproj", "{767CE45E-E309-4E12-9E4B-80F541DBEB01}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestCli", "TestCli\TestCli.csproj", "{767CE45E-E309-4E12-9E4B-80F541DBEB01}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DockerCli", "DockerCli\DockerCli.csproj", "{71A26DD4-C84A-43AD-B040-309D5AE26243}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{767CE45E-E309-4E12-9E4B-80F541DBEB01}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{767CE45E-E309-4E12-9E4B-80F541DBEB01}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{767CE45E-E309-4E12-9E4B-80F541DBEB01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{71A26DD4-C84A-43AD-B040-309D5AE26243}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{71A26DD4-C84A-43AD-B040-309D5AE26243}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{71A26DD4-C84A-43AD-B040-309D5AE26243}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{71A26DD4-C84A-43AD-B040-309D5AE26243}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
