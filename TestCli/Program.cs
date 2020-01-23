@@ -40,13 +40,13 @@ namespace TestCli {
             var crawlerConfig = new CrawlerConfig {
                 CheckExternalLinks = false,
                 FollowInternalLinks = true,
-                MaxConcurrency = 8,
-                MaxRequestsPerCrawl = 500,
-                TakeScreenShots = true,
+                MaxConcurrency = 1,
+                MaxRequestsPerCrawl = 500000,
+                TakeScreenShots = false,
                 RequestQueue = {baseUrl},
                 UrlFilter = $"{baseUrl}[.*]",
             };
-            var crawlId = db.NewCrawl(baseUrl);
+            var crawlId = db.NewCrawl(baseUrl, crawlerConfig);
             var eot = false;
             while (!eot && !cts.Token.IsCancellationRequested) {
                 try {
@@ -78,9 +78,10 @@ namespace TestCli {
                     await client.ReceiveAllAsync(cancellationToken: cts.Token);
                 }
                 catch (Exception e) {
-                    WriteLine(e);
-                    await Task.Delay(5000);
-                    crawlerConfig.MaxConcurrency = 1;
+                    throw;
+                    //WriteLine(e);
+                    //await Task.Delay(5000);
+                    //crawlerConfig.MaxConcurrency = 1;
                 }
             }
         }

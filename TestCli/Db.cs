@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Crawler3WebsocketClient;
 using SQLite;
 
@@ -18,6 +19,7 @@ namespace TestCli {
 
     public class Crawl : SqliteBase {
         public string BaseUrl { get; set; }
+        public string Configuration { get; set; }
     }
 
     public class Node : CrawlRelated {
@@ -45,8 +47,11 @@ namespace TestCli {
             _db.CreateTables<Crawl, Node, Edge>();
         }
 
-        public long NewCrawl(string baseUrl) {
-            var c = new Crawl {BaseUrl = baseUrl};
+        public long NewCrawl(string baseUrl, CrawlerConfig config) {
+            var jsonConfig = JsonSerializer.Serialize(config, new JsonSerializerOptions {
+                WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+            var c = new Crawl {BaseUrl = baseUrl, Configuration = jsonConfig};
             _db.Insert(c);
             return c.Id;
         }
