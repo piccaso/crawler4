@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -53,6 +54,25 @@ namespace TestCli {
                     WriteLine($"{crawlId}: {baseUrl}");
                     var purge = db.PurgeCrawl(crawlId);
                     WriteLine("Purge Count: " + purge);
+
+                    var edges = new List<CrawlerResponseEdge>();
+                    var nodes = new List<CrawlerResponseNode>();
+
+                    void FlushDb() {
+                        var cnt = edges.Count * nodes.Count;
+                        if(cnt < 1) return;
+                        var sw = new Stopwatch();
+                        sw.Start();
+                        db.StoreEdges(crawlId, edges);
+                        edges.Clear();
+                        db.StoreNodes(crawlId, nodes);
+                        nodes.Clear();
+                        sw.Stop();
+                        Console.WriteLine($"Stored {cnt} records in {sw.Elapsed.TotalSeconds:0.000}sec");
+                    }
+
+
+
                     using var client = new WebsocketJsonClient(new Uri(settings.CrawlerWebsocketUrl), logger);
                     var crawlSw = new Stopwatch();
                     crawlSw.Start();
@@ -60,18 +80,20 @@ namespace TestCli {
                     client.OnStatus += (s) => {
                         var avgPageSpeed = crawlSw.Elapsed.TotalSeconds / s.HandledRequestCount;
                         WriteLine($"pending: {s.PendingRequestCount}, handled: {s.HandledRequestCount}, buff: {client.JsonChannelSize}, avgSecondsPerPage:{avgPageSpeed:0.000}sec");
+                        if(nodes.Count > 10) FlushDb();
                     };
                     client.OnEot += () => {
+                        FlushDb();
                         WriteLine("Done");
                         eot = true;
                     };
 
                     client.OnNode += (n) => {
-                        db.StoreNodes(crawlId, n);
+                        nodes.Add(n);
                         WriteLine($"LoadTime: {n.LoadTime:0.000}sec - {n.Url}");
                     };
                     client.OnEdges += (e) => {
-                        db.StoreEdges(crawlId, e.Edges);
+                        edges.AddRange(e.Edges);
                     };
 
                     await client.SendAsync(crawlerConfig, cts.Token);
