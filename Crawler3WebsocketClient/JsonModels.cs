@@ -28,6 +28,7 @@ namespace Crawler3WebsocketClient {
         public string Text { get; set; }
         public byte[] ScreenShot { get; set; }
         public double LoadTime { get; set; }
+        public Dictionary<string,string> Headers { get; set; }
     }
 
     public class CrawlerResponseEdge {

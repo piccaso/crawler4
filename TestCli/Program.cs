@@ -41,8 +41,8 @@ namespace TestCli {
             var crawlerConfig = new CrawlerConfig {
                 CheckExternalLinks = false,
                 FollowInternalLinks = true,
-                MaxConcurrency = 1,
-                MaxRequestsPerCrawl = 500000,
+                MaxConcurrency = 3,
+                MaxRequestsPerCrawl = 1_000_000,
                 TakeScreenShots = false,
                 RequestQueue = {baseUrl},
                 UrlFilter = $"{baseUrl}[.*]",
@@ -71,8 +71,6 @@ namespace TestCli {
                         Console.WriteLine($"Stored {cnt} records in {sw.Elapsed.TotalSeconds:0.000}sec");
                     }
 
-
-
                     using var client = new WebsocketJsonClient(new Uri(settings.CrawlerWebsocketUrl), logger);
                     var crawlSw = new Stopwatch();
                     crawlSw.Start();
@@ -98,6 +96,7 @@ namespace TestCli {
 
                     await client.SendAsync(crawlerConfig, cts.Token);
                     await client.ReceiveAllAsync(cancellationToken: cts.Token);
+                    break;
                 }
                 catch (Exception e) {
                     throw;
