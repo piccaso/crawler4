@@ -63,6 +63,16 @@ namespace TestCli {
             return cnt;
         }
 
+        private class CountResult {
+            public long Count { get; set; }
+        }
+
+        public long CountNodes(long crawlId) {
+
+            var count = _db.Query<CountResult>("SELECT count(*) as Count FROM Node WHERE CrawlId = ?", crawlId);
+            return count.First().Count;
+        }
+
         public void StoreNodes(long crawlId, params CrawlerResponseNode[] nodes) {
             StoreNodes(crawlId, nodes.AsEnumerable());
         }

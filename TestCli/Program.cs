@@ -41,19 +41,23 @@ namespace TestCli {
             var crawlerConfig = new CrawlerConfig {
                 CheckExternalLinks = false,
                 FollowInternalLinks = true,
-                MaxConcurrency = 3,
+                MaxConcurrency = 8,
                 MaxRequestsPerCrawl = 1_000_000,
-                TakeScreenShots = false,
+                TakeScreenShots = true,
                 RequestQueue = {baseUrl},
-                UrlFilter = $"{baseUrl}[.*]",
+                UrlFilter = $"[^]{baseUrl}[.*]",
+                BetweenCallsMsec = 1,
+                StorageFolder = $"/tmp/session5"
             };
             var crawlId = db.NewCrawl(baseUrl, crawlerConfig);
             var eot = false;
+            var nodesCount = 0L;
             while (!eot && !cts.Token.IsCancellationRequested) {
                 try {
                     WriteLine($"{crawlId}: {baseUrl}");
-                    var purge = db.PurgeCrawl(crawlId);
-                    WriteLine("Purge Count: " + purge);
+                    //var purge = db.PurgeCrawl(crawlId);
+                    //WriteLine("Purge Count: " + purge);
+                    nodesCount = db.CountNodes(crawlId);
 
                     var edges = new List<CrawlerResponseEdge>();
                     var nodes = new List<CrawlerResponseNode>();
@@ -67,6 +71,7 @@ namespace TestCli {
                         edges.Clear();
                         db.StoreNodes(crawlId, nodes);
                         nodes.Clear();
+                        nodesCount = db.CountNodes(crawlId);
                         sw.Stop();
                         Console.WriteLine($"Stored {cnt} records in {sw.Elapsed.TotalSeconds:0.000}sec");
                     }
@@ -77,7 +82,7 @@ namespace TestCli {
 
                     client.OnStatus += (s) => {
                         var avgPageSpeed = crawlSw.Elapsed.TotalSeconds / s.HandledRequestCount;
-                        WriteLine($"pending: {s.PendingRequestCount}, handled: {s.HandledRequestCount}, buff: {client.JsonChannelSize}, avgSecondsPerPage:{avgPageSpeed:0.000}sec");
+                        WriteLine($"pending: {s.PendingRequestCount}, handled: {s.HandledRequestCount}, nodes: {nodesCount}, buff: {client.JsonChannelSize}, avgSecondsPerPage:{avgPageSpeed:0.000}sec");
                         if(nodes.Count > 10) FlushDb();
                     };
                     client.OnEot += () => {
@@ -89,6 +94,7 @@ namespace TestCli {
                     client.OnNode += (n) => {
                         nodes.Add(n);
                         WriteLine($"LoadTime: {n.LoadTime:0.000}sec - {n.Url}");
+                        nodesCount++;
                     };
                     client.OnEdges += (e) => {
                         edges.AddRange(e.Edges);
@@ -96,12 +102,12 @@ namespace TestCli {
 
                     await client.SendAsync(crawlerConfig, cts.Token);
                     await client.ReceiveAllAsync(cancellationToken: cts.Token);
-                    break;
+                    FlushDb();
                 }
                 catch (Exception e) {
-                    throw;
-                    //WriteLine(e);
-                    //await Task.Delay(5000);
+                    //throw;
+                    WriteLine(e);
+                    await Task.Delay(5000, cts.Token);
                     //crawlerConfig.MaxConcurrency = 1;
                 }
             }

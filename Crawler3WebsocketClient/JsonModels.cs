@@ -12,6 +12,8 @@ namespace Crawler3WebsocketClient {
         public bool TakeScreenShots { get; set; }
         public long MaxRequestsPerCrawl { get; set; }
         public long MaxConcurrency { get; set; }
+        public string StorageFolder { get; set; }
+        public int BetweenCallsMsec { get; set; }   
     }
 
     public class CrawlerResponseBase {
