@@ -23,7 +23,7 @@ namespace Crawler3WebsocketClient.Tests
             rq.Enqueue(crawlId, new []{"j4", "j5"});
 
             var d1 = rq.Dequeue(1, 10, DateTimeOffset.UtcNow.AddSeconds(10));
-            Assert.AreEqual(3, d1.Count);
+            Assert.AreEqual(4, d1.Count);
             rq.Delete(crawlId, d1);
         }
 
@@ -34,7 +34,11 @@ namespace Crawler3WebsocketClient.Tests
             var databasePath = $"{tempFile}.db";
             IRequestQueue rq = new SqliteRequestQueue.SqliteRequestQueue(databasePath);
             await RqTestDefaultWorkflow(rq, NextCrawlId());
-            File.Delete(databasePath);
+            try { File.Delete(databasePath); }
+            catch {
+                TestContext.WriteLine($"Cant delete {databasePath}");
+            }
+            
         }
 
         [Test]
@@ -61,9 +65,8 @@ namespace Crawler3WebsocketClient.Tests
             // Enqueue 3 Urls
             await rq.EnqueueAsync(crawlId, new[] { "j1", "j2", "j3" });
 
-            // Dequeue and finish 1
-            var d0 = new List<string>();
-            await foreach (var d in rq.DequeueAsync(1, 1, DateTimeOffset.UtcNow.AddSeconds(10)))
+            //Dequeue and finish 1
+            await foreach (var d in rq.DequeueAsync(crawlId, 1, DateTimeOffset.UtcNow.AddSeconds(10)))
             {
                 TestContext.WriteLine($"Processing... {d}");
                 await Task.Delay(200);
@@ -87,8 +90,8 @@ namespace Crawler3WebsocketClient.Tests
             }
             rq.Delete(crawlId, d1);
 
-            // that should hav been 3
-            Assert.AreEqual(3, d1.Count);
+            // that should hav been 3 from the queue and 1 from the failed jobs
+            Assert.AreEqual(4, d1.Count);
             
 
             // Queue should be empty

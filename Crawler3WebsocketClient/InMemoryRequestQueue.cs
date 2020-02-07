@@ -25,10 +25,9 @@ namespace Crawler3WebsocketClient {
 
         private void Requeue() {
             lock (Sync) {
-                IList<(string url, long crawlId, DateTimeOffset timeout)> timedOut;
                 if (!Jobs.Any()) return;
                 var now = DateTimeOffset.UtcNow;
-                timedOut = Jobs.Where(j => j.timeout > now).ToList();
+                var timedOut = Jobs.Where(j => j.timeout < now).ToList();
                 foreach (var j in timedOut) {
                     Jobs.Remove(j);
                     GetQueueByCrawlId(j.crawlId).Enqueue(j.url);
