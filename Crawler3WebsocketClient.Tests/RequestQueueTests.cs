@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -37,8 +36,9 @@ namespace Crawler3WebsocketClient.Tests
         [Test]
         public async Task ConcurrentSqliteFileAsync() {
             var databasePath = GetTempDatabasePath();
+            var db = new SqliteRequestQueue.SqliteRequestQueue(databasePath);
             var tasks = Enumerable.Range(1, 3)
-                .Select(i => RqTestDefaultWorkflow(new SqliteRequestQueue.SqliteRequestQueue(databasePath), NextCrawlId())).ToList();
+                .Select(i => RqTestDefaultWorkflow(db, NextCrawlId())).ToList();
             foreach (var task in tasks) {
                 await task;
             }
@@ -76,14 +76,14 @@ namespace Crawler3WebsocketClient.Tests
             //Dequeue and finish 1
             await foreach (var d in rq.DequeueAsync(crawlId, 1, DateTimeOffset.UtcNow.AddSeconds(10)))
             {
-                TestContext.WriteLine($"Processing... {d}");
+                TestContext.WriteLine($"[{crawlId}] rocessing... {d}");
                 await Task.Delay(200);
                 await rq.DeleteAsync(crawlId, d);
             }
 
             // Dequeue 1 and fail to finish in time
             await foreach (var d in rq.DequeueAsync(crawlId, 1, DateTimeOffset.UtcNow.AddSeconds(-1))) {
-                TestContext.WriteLine($"Failing... {d}");
+                TestContext.WriteLine($"[{crawlId}] Failing... {d}");
                 await Task.Delay(200);
             }
 
@@ -94,7 +94,7 @@ namespace Crawler3WebsocketClient.Tests
             var d1 = rq.Dequeue(crawlId, 10, DateTimeOffset.UtcNow.AddSeconds(10));
 
             foreach (var d in d1) {
-                TestContext.WriteLine($"Processing... {d}");
+                TestContext.WriteLine($"[{crawlId}] Processing... {d}");
             }
             rq.Delete(crawlId, d1);
 
@@ -104,10 +104,10 @@ namespace Crawler3WebsocketClient.Tests
 
             // Queue should be empty
             var d2 = rq.Dequeue(crawlId, 10, DateTimeOffset.UtcNow.AddSeconds(10));
-            Assert.AreEqual(0, d2.Count, message: $"Unexpected: {string.Join(",", d2)}");
+            Assert.AreEqual(0, d2.Count, message: $"[{crawlId}] Unexpected: {string.Join(",", d2)}");
 
             sw.Stop();
-            TestContext.WriteLine($"ElapsedMilliseconds: {sw.ElapsedMilliseconds}");
+            TestContext.WriteLine($"[{crawlId}] ElapsedMilliseconds: {sw.ElapsedMilliseconds}");
         }
     }
 }
