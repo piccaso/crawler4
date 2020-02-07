@@ -69,9 +69,9 @@ namespace SqliteRequestQueue
         }
 
         public async Task RequeueTimedOutJobsAsync(long crawlId) {
-            var now = DateTimeOffset.UtcNow;
-            var jobs = await _db.QueryAsync<Job>("SELECT Url FROM Job WHERE CrawlId=? AND Timeout < ?", crawlId, now);
             await _db.RunInTransactionAsync(d => {
+                var now = DateTimeOffset.UtcNow;
+                var jobs = d.Query<Job>("SELECT Url FROM Job WHERE CrawlId=? AND Timeout < ?", crawlId, now);
                 foreach (var j in jobs) {
                     d.Execute("DELETE FROM Job WHERE CrawlId=? AND Url=?", crawlId, j.Url);
                     d.Insert(new Queue {

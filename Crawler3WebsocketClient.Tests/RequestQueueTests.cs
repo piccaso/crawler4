@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -14,7 +15,7 @@ namespace Crawler3WebsocketClient.Tests
 
         [Test]
         public void InMemorySync() {
-            IRequestQueue rq = new InMemoryRequestQueue();
+            IRequestQueue rq = new SqliteRequestQueue.SqliteRequestQueue(":memory:");
             var crawlId = NextCrawlId();
             rq.Enqueue(crawlId, new []{"j1","j2","j3"});
             var d0 = rq.Dequeue(crawlId, 1, DateTimeOffset.UtcNow.AddSeconds(1));
@@ -27,11 +28,25 @@ namespace Crawler3WebsocketClient.Tests
             rq.Delete(crawlId, d1);
         }
 
-        [Test]
-        public async Task SqliteFileAsync() {
+        private string GetTempDatabasePath() {
             var tempFile = Path.GetTempFileName();
             File.Delete(tempFile);
-            var databasePath = $"{tempFile}.db";
+            return $"{tempFile}.db";
+        }
+
+        [Test]
+        public async Task ConcurrentSqliteFileAsync() {
+            var databasePath = GetTempDatabasePath();
+            var tasks = Enumerable.Range(1, 16)
+                .Select(i => RqTestDefaultWorkflow(new SqliteRequestQueue.SqliteRequestQueue(databasePath), NextCrawlId())).ToList();
+            foreach (var task in tasks) {
+                await task;
+            }
+        }
+
+        [Test]
+        public async Task SqliteFileAsync() {
+            var databasePath = GetTempDatabasePath();
             IRequestQueue rq = new SqliteRequestQueue.SqliteRequestQueue(databasePath);
             await RqTestDefaultWorkflow(rq, NextCrawlId());
             try { File.Delete(databasePath); }
@@ -45,13 +60,6 @@ namespace Crawler3WebsocketClient.Tests
         public async Task SqliteInMemoryAsync()
         {
             IRequestQueue rq = new SqliteRequestQueue.SqliteRequestQueue(":memory:");
-            await RqTestDefaultWorkflow(rq, NextCrawlId());
-        }
-
-        [Test]
-        public async Task InMemoryAsync()
-        {
-            IRequestQueue rq = new InMemoryRequestQueue();
             await RqTestDefaultWorkflow(rq, NextCrawlId());
         }
 
