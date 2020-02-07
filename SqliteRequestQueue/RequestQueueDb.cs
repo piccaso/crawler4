@@ -4,57 +4,47 @@ using System.Linq;
 using System.Threading.Tasks;
 using SQLite;
 
-namespace SqliteRequestQueue
-{
+namespace SqliteRequestQueue {
     internal class Job {
-        [SQLite.Indexed]
-        public long CrawlId { get; set; }
-        [SQLite.Indexed]
-        public string Url { get; set; }
-        [SQLite.Indexed]
-        public DateTimeOffset Timeout { get; set; }
+        [Indexed] public long CrawlId { get; set; }
+        [Indexed] public string Url { get; set; }
+        [Indexed] public DateTimeOffset Timeout { get; set; }
     }
 
     internal class Queue {
-        [SQLite.Indexed]
-        public long CrawlId { get; set; }
-        [SQLite.Indexed]
-        public string Url { get; set; }
+        [Indexed] public long CrawlId { get; set; }
+        [Indexed] public string Url { get; set; }
     }
 
-    internal class RequestQueueDb
-    {
+    internal class RequestQueueDb {
         private readonly SQLiteAsyncConnection _db;
 
         public RequestQueueDb(string databasePath) {
             _db = new SQLiteAsyncConnection(databasePath);
         }
 
-        public Task CreateTablesAsync() => _db.CreateTablesAsync<Job, Queue>();
+        public Task CreateTablesAsync() {
+            return _db.CreateTablesAsync<Job, Queue>();
+        }
 
         public Task EnqueueAsync(long crawlId, IEnumerable<string> urls) {
             var q = urls.Select(url => new Queue {
-                CrawlId = crawlId, 
+                CrawlId = crawlId,
                 Url = url
             });
             return _db.InsertAllAsync(q);
         }
 
         public async IAsyncEnumerable<string> DequeueAsync(long crawlId, int maxUrls) {
-            var queue = new List<Queue>();
-            await _db.RunInTransactionAsync(d => {
-                queue = d.Query<Queue>("SELECT Url FROM Queue WHERE CrawlId=? LIMIT ?", crawlId, maxUrls);
-                foreach (var q in queue) {
-                    d.Execute("DELETE FROM Queue WHERE CrawlId=? AND Url=?", crawlId, q.Url);
-                }
-            });
-            foreach (var q in queue) {
-                yield return q.Url;
-            }
+            var queue = await _db.QueryAsync<Queue>("SELECT Url FROM Queue WHERE CrawlId=? LIMIT ?", crawlId, maxUrls);
+            foreach (var q in queue)
+                await _db.ExecuteAsync("DELETE FROM Queue WHERE CrawlId=? AND Url=?", crawlId, q.Url);
+
+            foreach (var q in queue) yield return q.Url;
         }
 
         public Task InsertJobsAsync(long crawlId, IEnumerable<string> urls, DateTimeOffset timeout) {
-            var jobs = urls.Select(url => new Job{
+            var jobs = urls.Select(url => new Job {
                 CrawlId = crawlId,
                 Timeout = timeout,
                 Url = url
@@ -69,17 +59,15 @@ namespace SqliteRequestQueue
         }
 
         public async Task RequeueTimedOutJobsAsync(long crawlId) {
-            await _db.RunInTransactionAsync(d => {
-                var now = DateTimeOffset.UtcNow;
-                var jobs = d.Query<Job>("SELECT Url FROM Job WHERE CrawlId=? AND Timeout < ?", crawlId, now);
-                foreach (var j in jobs) {
-                    d.Execute("DELETE FROM Job WHERE CrawlId=? AND Url=?", crawlId, j.Url);
-                    d.Insert(new Queue {
-                        CrawlId = crawlId,
-                        Url = j.Url,
-                    });
-                }
-            });
-        }  
+            var now = DateTimeOffset.UtcNow;
+            var jobs = await _db.QueryAsync<Job>("SELECT Url FROM Job WHERE CrawlId=? AND Timeout < ?", crawlId, now);
+            foreach (var j in jobs) {
+                await _db.ExecuteAsync("DELETE FROM Job WHERE CrawlId=? AND Url=?", crawlId, j.Url);
+                await _db.InsertAsync(new Queue {
+                    CrawlId = crawlId,
+                    Url = j.Url
+                });
+            }
+        }
     }
 }

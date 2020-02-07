@@ -37,7 +37,7 @@ namespace Crawler3WebsocketClient.Tests
         [Test]
         public async Task ConcurrentSqliteFileAsync() {
             var databasePath = GetTempDatabasePath();
-            var tasks = Enumerable.Range(1, 16)
+            var tasks = Enumerable.Range(1, 3)
                 .Select(i => RqTestDefaultWorkflow(new SqliteRequestQueue.SqliteRequestQueue(databasePath), NextCrawlId())).ToList();
             foreach (var task in tasks) {
                 await task;
