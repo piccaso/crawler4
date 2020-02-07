@@ -40,14 +40,12 @@ namespace TestCli {
             //var baseUrl = "https://orf.at/";
             var crawlerConfig = new CrawlerConfig {
                 CheckExternalLinks = false,
-                FollowInternalLinks = true,
-                MaxConcurrency = 8,
+                FollowInternalLinks = false,
+                //MaxConcurrency = 8,
                 MaxRequestsPerCrawl = 1_000_000,
                 TakeScreenShots = true,
                 RequestQueue = {baseUrl},
                 UrlFilter = $"[^]{baseUrl}[.*]",
-                BetweenCallsMsec = 1,
-                StorageFolder = $"/tmp/session5"
             };
             var crawlId = db.NewCrawl(baseUrl, crawlerConfig);
             var eot = false;
