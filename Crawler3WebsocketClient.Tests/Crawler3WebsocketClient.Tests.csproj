@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Crawler3WebsocketClient\Crawler3WebsocketClient.csproj" />
+    <ProjectReference Include="..\SqliteRequestQueue\SqliteRequestQueue.csproj" />
   </ItemGroup>
 
 </Project>
