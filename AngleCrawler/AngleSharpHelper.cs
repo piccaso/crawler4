@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -58,8 +59,7 @@ namespace AngleCrawler
             }
         }
 
-        public static IBrowsingContext DefaultContext(string userAgent = null, IDictionary<string, string> headers = null)
-        {
+        public static IBrowsingContext DefaultContext(string userAgent = null, IDictionary<string, string> headers = null) {
             userAgent ??= $"Mozilla/5.0 (compatible; crawler)";
             headers ??= new Dictionary<string, string> {{"accept", "*/*"}};
             var config = Configuration.Default;
@@ -85,7 +85,7 @@ namespace AngleCrawler
 
         public static Task<ExtendedDocument> OpenAsync(string address)
         {
-            return DefaultContext().OpenAsyncExt(address);
+                return DefaultContext().OpenAsyncExt(address);
         }
 
         public class ExtendedDocument

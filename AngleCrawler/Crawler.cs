@@ -17,8 +17,7 @@ namespace AngleCrawler
         public bool FollowInternalLinks { get; set; } = true;
         public int MaxRequestsPerCrawl { get; set; } = 500;
         public int MaxConcurrency { get; set; } = 1;
-        public string UserAgent { get; set; }
-        public IDictionary<string,string> RequestHeaders { get; set; }
+        public IDictionary<string, string> RequestHeaders { get; set; } = new Dictionary<string, string>();
         public CancellationToken CancellationToken { get; set; } = default;
         public int Retries { get; set; } = 5;
         public int DelayBetweenRetries { get; set; } = 1000;
@@ -119,7 +118,6 @@ namespace AngleCrawler
         }
 
         private async Task WorkAsync() {
-            var context = AngleSharpHelper.DefaultContext(_config.UserAgent, _config.RequestHeaders);
             while (await _urlChannel.Reader.WaitToReadAsync(_cts.Token) && !_cts.IsCancellationRequested) {
                 if (!_urlChannel.Reader.TryRead(out var requestUrl)) continue;
                 Interlocked.Decrement(ref _channelSize);
@@ -128,7 +126,7 @@ namespace AngleCrawler
                 Interlocked.Increment(ref _activeWorkers);
                 try {
                     requestUrl.Url = RemoveFragment(requestUrl.Url);
-                    if (_urlStore.Add(requestUrl.Url)) await ProcessUrlAsync(requestUrl, context);
+                    if (_urlStore.Add(requestUrl.Url)) await ProcessUrlAsync(requestUrl);
                 }
                 finally {
                     Interlocked.Decrement(ref _activeWorkers);
@@ -147,11 +145,11 @@ namespace AngleCrawler
             }
         }
 
-        private async Task ProcessUrlAsync(RequestUrl requestUrl, IBrowsingContext context) {
+        private async Task ProcessUrlAsync(RequestUrl requestUrl) {
             var pseudoUrl = new PseudoUrl(_config.UrlFilter);
             try
             {
-                var (node, edges) = await Try.HarderAsync(_config.Retries, () => ProcessRequestAsync(requestUrl, context), _config.DelayBetweenRetries);
+                var (node, edges) = await Try.HarderAsync(_config.Retries, () => ProcessRequestAsync(requestUrl), _config.DelayBetweenRetries);
                 node.External = !pseudoUrl.Match(node.Url);
                 Interlocked.Increment(ref _requestCount);
                 await WriteResultAsync(node, edges);
@@ -183,7 +181,8 @@ namespace AngleCrawler
             }
         }
 
-        private async Task<(CrawlerNode node, IList<CrawlerEdge> edges)> ProcessRequestAsync(RequestUrl requestUrl, IBrowsingContext context) {
+        private async Task<(CrawlerNode node, IList<CrawlerEdge> edges)> ProcessRequestAsync(RequestUrl requestUrl) {
+            var context = AngleSharpHelper.DefaultContext("", _config.RequestHeaders);
             var edges = new List<CrawlerEdge>();
             var node = new CrawlerNode();
             var response = await context.OpenAsyncExt(requestUrl.Url, requestUrl.Referrer, _cts.Token);

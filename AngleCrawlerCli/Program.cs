@@ -18,12 +18,20 @@ namespace AngleCrawlerCli
                 e.Cancel = true;
             };
 
-            var baseUrl = "https://www.acolono.com/";
+            //var baseUrl = "https://www.acolono.com/";
+            //var baseUrl = "https://www.ichkoche.at/";
+            //var baseUrl = "https://failblog.cheezburger.com/";
+            var baseUrl = "https://ld.m.887.at/p";
             var config = new CrawlerConfig {
-                CancellationToken = cts.Token, // TODO: make it work
+                CancellationToken = cts.Token,
                 UrlFilter = $"[^]{baseUrl}[.*]",
                 MaxConcurrency = Environment.ProcessorCount,
-                //MaxRequestsPerCrawl = 10,
+                MaxRequestsPerCrawl = int.MaxValue,
+                RequestHeaders = {
+                    {"accept","text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"},
+                    {"accept-language", "en-US,en;q=0.9,de;q=0.8,de-AT;q=0.7"},
+                    {"user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36 Edg/80.0.361.50" },
+                }
             };
 
             using var crawler = new Crawler(config);
@@ -43,7 +51,7 @@ namespace AngleCrawlerCli
         static async Task ConsumeCrawlerResultsAsync(ChannelReader<(CrawlerNode node, IList<CrawlerEdge> edges)> results) {
             var cnt = 0;
             await foreach (var (node, edges) in results.ReadAllAsync()) {
-                Console.WriteLine($"{node.Url} ({edges.Count})");
+                Console.WriteLine($"{node.Status:000} {node.Url} ({edges.Count})");
                 //node.Html = null;
                 //node.Headers = null;
                 //var js = System.Text.Json.JsonSerializer.Serialize(node, new JsonSerializerOptions{WriteIndented = true,  IgnoreNullValues = true});
