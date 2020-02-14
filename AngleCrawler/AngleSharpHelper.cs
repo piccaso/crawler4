@@ -90,7 +90,7 @@ namespace AngleCrawler
 
         public class ExtendedDocument
         {
-            public IHtmlDocument Document { get; set; }
+            public IDocument Document { get; set; }
             public int StatusCode { get; set; }
             public HttpHeaders Headers { get; set; }
         }

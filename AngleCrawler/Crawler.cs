@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using AngleSharp;
+using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
 
 namespace AngleCrawler
@@ -43,8 +44,21 @@ namespace AngleCrawler
         public string Relation { get; set; }
     }
 
+    public interface IConcurrentCrawlerRequester {
+        Task<AngleSharpHelper.ExtendedDocument> OpenAsync(string url, string referrer,
+            IDictionary<string, string> requestHeaders, CancellationToken cancellationToken);
+    }
+
+    public class AngleSharpConcurrentCrawlerRequester : IConcurrentCrawlerRequester {
+        public Task<AngleSharpHelper.ExtendedDocument> OpenAsync(string url, string referrer, IDictionary<string, string> requestHeaders, CancellationToken cancellationToken) {
+            var ctx = AngleSharpHelper.DefaultContext(null, requestHeaders);
+            return ctx.OpenAsyncExt(url, referrer, cancellationToken);
+        }
+    }
+
     public class Crawler : IDisposable {
         private readonly CrawlerConfig _config;
+        private readonly IConcurrentCrawlerRequester _requester;
         private readonly Channel<RequestUrl> _urlChannel = Channel.CreateUnbounded<RequestUrl>();
         public readonly Channel<(CrawlerNode node, IList<CrawlerEdge> edges)> ResultsChannel = Channel.CreateUnbounded<(CrawlerNode node, IList<CrawlerEdge> edges)>();
         private readonly IConcurrentUrlStore _urlStore = new ConcurrentUrlStore();
@@ -54,8 +68,9 @@ namespace AngleCrawler
         private long _requestCount = 0;
         private long _activeWorkers = 0;
 
-        public Crawler(CrawlerConfig config) {
+        public Crawler(CrawlerConfig config, IConcurrentCrawlerRequester requester) {
             _config = config;
+            _requester = requester;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(_config.CancellationToken);
         }
 
@@ -149,7 +164,7 @@ namespace AngleCrawler
             var pseudoUrl = new PseudoUrl(_config.UrlFilter);
             try
             {
-                var (node, edges) = await Try.HarderAsync(_config.Retries, () => ProcessRequestAsync(requestUrl), _config.DelayBetweenRetries);
+                var (node, edges) = await Try.HarderAsync(_config.Retries, () => ProcessRequestAsync(requestUrl, _config.RequestHeaders), _config.DelayBetweenRetries);
                 node.External = !pseudoUrl.Match(node.Url);
                 Interlocked.Increment(ref _requestCount);
                 await WriteResultAsync(node, edges);
@@ -181,11 +196,10 @@ namespace AngleCrawler
             }
         }
 
-        private async Task<(CrawlerNode node, IList<CrawlerEdge> edges)> ProcessRequestAsync(RequestUrl requestUrl) {
-            var context = AngleSharpHelper.DefaultContext("", _config.RequestHeaders);
+        private async Task<(CrawlerNode node, IList<CrawlerEdge> edges)> ProcessRequestAsync(RequestUrl requestUrl, IDictionary<string, string> requestHeaders) {
             var edges = new List<CrawlerEdge>();
             var node = new CrawlerNode();
-            var response = await context.OpenAsyncExt(requestUrl.Url, requestUrl.Referrer, _cts.Token);
+            var response = await _requester.OpenAsync(requestUrl.Url, requestUrl.Referrer, requestHeaders, _cts.Token);
             using var doc = response.Document;
             node.Url = doc.Url;
             void AddEdge(string child, string relation, string parent = null) => edges.Add(new CrawlerEdge {Child = child, Parent = parent ?? node.Url, Relation = relation});

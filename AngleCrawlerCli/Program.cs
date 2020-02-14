@@ -1,5 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
@@ -19,12 +23,16 @@ namespace AngleCrawlerCli
             };
 
             //var baseUrl = "https://www.acolono.com/";
+            //var baseUrl = "https://orf.at/";
             //var baseUrl = "https://www.ichkoche.at/";
+            //var baseUrl = "https://www.ichkoche.at/facebook-login";
             //var baseUrl = "https://failblog.cheezburger.com/";
             var baseUrl = "https://ld.m.887.at/p";
+            //var baseUrl = "https://endlq9qkj597t.x.pipedream.net/";
             var config = new CrawlerConfig {
                 CancellationToken = cts.Token,
                 UrlFilter = $"[^]{baseUrl}[.*]",
+                //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
                 MaxConcurrency = Environment.ProcessorCount,
                 MaxRequestsPerCrawl = int.MaxValue,
                 RequestHeaders = {
@@ -33,8 +41,14 @@ namespace AngleCrawlerCli
                     {"user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36 Edg/80.0.361.50" },
                 }
             };
+            using var handler = new HttpClientHandler {
+                AutomaticDecompression = DecompressionMethods.All,
+                AllowAutoRedirect = true,
+                CookieContainer = new CookieContainer()
+            };
 
-            using var crawler = new Crawler(config);
+            using var httpClient = new HttpClient(handler);
+            using var crawler = new Crawler(config, new HttpClientConcurrentCrawlerRequester(httpClient));
             var consumerTask = ConsumeCrawlerResultsAsync(crawler.ResultsChannel.Reader);
             var crawlerTask = crawler.CrawlAsync();
             await crawler.EnqueueAsync(baseUrl);
@@ -45,13 +59,19 @@ namespace AngleCrawlerCli
         }
 
         private static void OnStatusAction((long channelSize, long activeWorkers, long requestCount) args) {
-            Console.WriteLine($"cs:{args.channelSize}, w:{args.activeWorkers}, cnt:{args.requestCount}");
+            Console.WriteLine($"q:{args.channelSize}, w:{args.activeWorkers}, cnt:{args.requestCount}");
         }
 
         static async Task ConsumeCrawlerResultsAsync(ChannelReader<(CrawlerNode node, IList<CrawlerEdge> edges)> results) {
             var cnt = 0;
             await foreach (var (node, edges) in results.ReadAllAsync()) {
-                Console.WriteLine($"{node.Status:000} {node.Url} ({edges.Count})");
+                if (Debugger.IsAttached && node.Url.Contains("facebook.com")) {
+                    Debugger.Break();
+                }
+                Console.WriteLine($"{node.Status:000}{(node.External ? "X":"")} {node.Url} ({edges.Count})");
+                //foreach (var header in node.Headers) {
+                //    Console.WriteLine($"    {header.Key}: {header.value}");
+                //}
                 //node.Html = null;
                 //node.Headers = null;
                 //var js = System.Text.Json.JsonSerializer.Serialize(node, new JsonSerializerOptions{WriteIndented = true,  IgnoreNullValues = true});
