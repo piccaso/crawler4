@@ -23,7 +23,7 @@ namespace AngleCrawlerCli
                 CancellationToken = cts.Token, // TODO: make it work
                 UrlFilter = $"[^]{baseUrl}[.*]",
                 MaxConcurrency = Environment.ProcessorCount,
-                //MaxRequestsPerCrawl = 10, // TODO: make it work
+                //MaxRequestsPerCrawl = 10,
             };
 
             using var crawler = new Crawler(config);

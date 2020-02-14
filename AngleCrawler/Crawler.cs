@@ -84,9 +84,7 @@ namespace AngleCrawler
 
                 tasks.Add(StopOnEmptyChannelAsync());
 
-                foreach (var task in tasks) {
-                    await task;
-                }
+                await Task.WhenAll(tasks);
             }
             catch (OperationCanceledException) {
                 /* just stop */
@@ -98,14 +96,14 @@ namespace AngleCrawler
         private async Task StopOnEmptyChannelAsync() {
             var shutdownCount = 0;
             var statusChecksum = 0L;
-            while (!_cts.Token.IsCancellationRequested) {
-                await Task.Delay(500, _cts.Token);
+            while (true) {
+                await Task.Delay(500);
                 var channelSize = Interlocked.Read(ref _channelSize);
                 var activeWorkers = Interlocked.Read(ref _activeWorkers);
                 var requestCount = Interlocked.Read(ref _requestCount);
                 if (channelSize <= 0 && activeWorkers <= 0) shutdownCount++;
                 else shutdownCount = 0;
-                if (shutdownCount > 3) {
+                if (shutdownCount > 3 || _cts.IsCancellationRequested) {
                     _urlChannel.Writer.TryComplete();
                     ResultsChannel.Writer.TryComplete();
                     return;
@@ -123,10 +121,10 @@ namespace AngleCrawler
         private async Task WorkAsync() {
             var context = AngleSharpHelper.DefaultContext(_config.UserAgent, _config.RequestHeaders);
             while (await _urlChannel.Reader.WaitToReadAsync(_cts.Token) && !_cts.IsCancellationRequested) {
-                var requestCount = Interlocked.Read(ref _requestCount);
-                if(requestCount >= _config.MaxRequestsPerCrawl) return;
                 if (!_urlChannel.Reader.TryRead(out var requestUrl)) continue;
                 Interlocked.Decrement(ref _channelSize);
+                var requestCount = Interlocked.Read(ref _requestCount);
+                if (requestCount >= _config.MaxRequestsPerCrawl) continue;
                 Interlocked.Increment(ref _activeWorkers);
                 try {
                     requestUrl.Url = RemoveFragment(requestUrl.Url);
