@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
 using NUnit.Framework;
 
 namespace Crawler3WebsocketClient.Tests {
@@ -44,6 +47,15 @@ namespace Crawler3WebsocketClient.Tests {
         [TestCase(" ")]
         public void Throws(string purl) {
             Assert.Throws<ArgumentException>(() => { _ = new PseudoUrl(purl); });
+        }
+
+        [Test]
+        public async Task ChannelTestAsync() {
+            var c = Channel.CreateUnbounded<string>();
+            c.Writer.TryComplete();
+            c.Writer.TryComplete();
+            await Task.Delay(1);
+            c.Writer.TryWrite("lala");
         }
     }
 }
