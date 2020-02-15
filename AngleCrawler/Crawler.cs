@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -35,6 +36,7 @@ namespace AngleCrawler
         public string Html { get; set; }
         public bool External { get; set; }
         public string Error { get; set; }
+        public double LoadTimeSeconds { get; set; }
         public IList<(string Key, string value)> Headers { get; set; }
     }
 
@@ -79,6 +81,10 @@ namespace AngleCrawler
         }
 
         public async Task<bool> EnqueueAsync(RequestUrl requestUrl) {
+            var channelSize = Interlocked.Read(ref _channelSize);
+            var requestCount = Interlocked.Read(ref _requestCount);
+            var activeWorkers = Interlocked.Read(ref _activeWorkers);
+            if (channelSize + requestCount + activeWorkers > _config.MaxRequestsPerCrawl) return false;
             try {
                 await _urlChannel.Writer.WriteAsync(requestUrl, _cts.Token);
                 Interlocked.Increment(ref _channelSize);
@@ -123,7 +129,7 @@ namespace AngleCrawler
                     return;
                 }
 
-                var newStatusChecksum = channelSize + activeWorkers + requestCount;
+                var newStatusChecksum = unchecked(channelSize ^ activeWorkers ^ requestCount);
                 if (statusChecksum != newStatusChecksum) {
                     statusChecksum = newStatusChecksum;
                     OnStatus?.Invoke((channelSize, activeWorkers, requestCount));
@@ -197,21 +203,28 @@ namespace AngleCrawler
         }
 
         private async Task<(CrawlerNode node, IList<CrawlerEdge> edges)> ProcessRequestAsync(RequestUrl requestUrl, IDictionary<string, string> requestHeaders) {
+            var stopwatch = new Stopwatch();
             var edges = new List<CrawlerEdge>();
             var node = new CrawlerNode();
+            stopwatch.Start();
             var response = await _requester.OpenAsync(requestUrl.Url, requestUrl.Referrer, requestHeaders, _cts.Token);
+            stopwatch.Stop();
+            node.LoadTimeSeconds = stopwatch.Elapsed.TotalSeconds;
             using var doc = response.Document;
             node.Url = doc.Url;
             void AddEdge(string child, string relation, string parent = null) => edges.Add(new CrawlerEdge {Child = child, Parent = parent ?? node.Url, Relation = relation});
-            
-            if (requestUrl.Url != doc.Url) {
-                AddEdge(doc.Url, "redirect", requestUrl.Url);
-            }
-
-            node.Status = response.StatusCode;
-            node.Headers = (from header in response.Headers from value in header.Value select (header.Key, value)).ToList();
             var contentType = doc.ContentType;
             var contentTypeOk = contentType.StartsWith("text/html");
+            if (contentTypeOk && doc.QuerySelector("link[rel=canonical]") is IHtmlLinkElement cl && Uri.TryCreate(cl.Href, UriKind.Absolute, out var clHr)) {
+                node.Url = clHr.ToString();
+            }
+
+            if (requestUrl.Url != node.Url) {
+                AddEdge(node.Url, "redirect", requestUrl.Url);
+            }
+            node.Status = response.StatusCode;
+            node.Headers = (from header in response.Headers from value in header.Value select (header.Key, value)).ToList();
+            
             if (contentTypeOk) {
                 var links = doc.QuerySelectorAll("a").OfType<IHtmlAnchorElement>();
                 foreach (var element in links) {
