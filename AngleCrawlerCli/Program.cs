@@ -22,7 +22,9 @@ namespace AngleCrawlerCli
                 e.Cancel = true;
             };
 
-            var baseUrl = "https://www.acolono.com/";
+            //var baseUrl = "https://kraftner.com/";
+            //var baseUrl = "https://www.acolono.com/";
+            var baseUrl = "https://www.drupal.org";
             //var baseUrl = "https://orf.at/";
             //var baseUrl = "https://www.ichkoche.at/";
             //var baseUrl = "https://www.ichkoche.at/facebook-login";
@@ -49,6 +51,7 @@ namespace AngleCrawlerCli
             using var httpClient = new HttpClient(handler);
             //var requester = new ZenscrapeConcurrentCrawlerRequester(httpClient, GetZenscrapeApiKey());
             var requester = new HttpClientConcurrentCrawlerRequester(httpClient);
+            //var requester = new PrerenderCloudConcurrentCrawlerRequester(httpClient);
             //var requester = new RendertronConcurrentCrawlerRequester(httpClient);
             using var crawler = new Crawler(config, requester);
             var consumerTask = ConsumeCrawlerResultsAsync(crawler.ResultsChannelReader);
