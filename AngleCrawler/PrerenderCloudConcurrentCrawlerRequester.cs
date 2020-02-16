@@ -16,11 +16,10 @@ namespace AngleCrawler {
             _requester = new HttpClientConcurrentCrawlerRequester(httpClient);
         }
 
-        public async Task<IResponse> OpenAsync(string url, string referrer, IDictionary<string, string> requestHeaders,
-            CancellationToken cancellationToken) {
+        public async Task<IResponse> OpenAsync(string url, string referrer, CancellationToken cancellationToken) {
             // https://www.prerender.cloud/docs/api
             var prerenderCloudUrl = $"{_prerenderCloudServiceUrl.TrimEnd('/')}/{url}";
-            var response = await _requester.OpenAsync(prerenderCloudUrl, referrer, requestHeaders, cancellationToken);
+            var response = await _requester.OpenAsync(prerenderCloudUrl, referrer, cancellationToken);
             return new DefaultResponse {
                 Headers = response.Headers,
                 StatusCode = response.StatusCode,

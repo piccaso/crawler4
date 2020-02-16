@@ -20,13 +20,11 @@ namespace AngleCrawler
             _httpClient = httpClient;
         }
 
-        public async Task<IResponse> OpenAsync(string url, string referrer, IDictionary<string, string> requestHeaders, CancellationToken cancellationToken) {
+        public async Task<IResponse> OpenAsync(string url, string referrer, CancellationToken cancellationToken) {
             var contentStream = new MemoryStream();
             using var msg = new HttpRequestMessage(HttpMethod.Get, url);
-            requestHeaders ??= new Dictionary<string, string>();
-            if (!string.IsNullOrWhiteSpace(referrer)) requestHeaders["referer"] = referrer;
-            foreach (var (key, value) in requestHeaders) {
-                if(!msg.Headers.TryAddWithoutValidation(key, value)) msg.Content.Headers.TryAddWithoutValidation(key, value);
+            if (!string.IsNullOrEmpty(referrer)) {
+                msg.Headers.TryAddWithoutValidation("referer", referrer);
             }
             using var response = await _httpClient.SendAsync(msg, cancellationToken);
             await response.Content.CopyToAsync(contentStream);

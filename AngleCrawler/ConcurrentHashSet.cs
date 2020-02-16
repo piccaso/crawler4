@@ -14,6 +14,7 @@ namespace AngleCrawler {
         public int Count => _hashSet.Count;
         public void Dispose() => _hashSet.Dispose();
         public bool Add(string url) => _hashSet.Add(url);
+        public bool Contains(string url) => _hashSet.Contains(url);
     }
 
 

@@ -19,11 +19,10 @@ namespace AngleCrawler {
             _escapedRender = Uri.EscapeDataString(renderJavascript.ToString().ToLowerInvariant());
         }
 
-        public async Task<IResponse> OpenAsync(string url, string referrer, IDictionary<string, string> requestHeaders,
-            CancellationToken cancellationToken) {
+        public async Task<IResponse> OpenAsync(string url, string referrer, CancellationToken cancellationToken) {
             const string baseUrl = "https://app.zenscrape.com/api/v1/get";
             var scrapeUrl = $"{baseUrl}?apikey={_escapedApiKey}&url={Uri.EscapeDataString(url)}&render={_escapedRender}";
-            var response = await _requester.OpenAsync(scrapeUrl, referrer, requestHeaders, cancellationToken);
+            var response = await _requester.OpenAsync(scrapeUrl, referrer, cancellationToken);
             return new DefaultResponse {
                 Headers = response.Headers,
                 StatusCode = response.StatusCode,

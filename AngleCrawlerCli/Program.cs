@@ -24,36 +24,38 @@ namespace AngleCrawlerCli
 
             //var baseUrl = "https://kraftner.com/";
             //var baseUrl = "https://www.acolono.com/";
-            var baseUrl = "https://www.drupal.org";
             //var baseUrl = "https://orf.at/";
             //var baseUrl = "https://www.ichkoche.at/";
             //var baseUrl = "https://www.ichkoche.at/facebook-login";
             //var baseUrl = "https://failblog.cheezburger.com/";
-            //var baseUrl = "https://ld.m.887.at/p";
+            var baseUrl = "https://ld.m.887.at/p";
+            //var baseUrl = "https://endlq9qkj597t.x.pipedream.net/";
             var config = new CrawlerConfig {
-                CancellationToken = cts.Token,
                 UrlFilter = $"[^]{baseUrl}[.*]",
                 //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
                 MaxConcurrency = Environment.ProcessorCount * 2,
-                MaxRequestsPerCrawl = 1000,
-                RequestHeaders = {
-                    {"accept","text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"},
-                    {"accept-language", "en-US,en;q=0.9,de;q=0.8,de-AT;q=0.7"},
-                    {"user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36 Edg/80.0.361.50" },
-                }
+                MaxRequestsPerCrawl = 200_000,
             };
+            var cc = new CookieContainer();
             using var handler = new HttpClientHandler {
                 AutomaticDecompression = DecompressionMethods.All,
                 AllowAutoRedirect = true,
-                CookieContainer = new CookieContainer()
+                CookieContainer = cc,
             };
-
             using var httpClient = new HttpClient(handler);
-            //var requester = new ZenscrapeConcurrentCrawlerRequester(httpClient, GetZenscrapeApiKey());
-            var requester = new HttpClientConcurrentCrawlerRequester(httpClient);
+            httpClient.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9");
+            httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9,de;q=0.8,de-AT;q=0.7");
+            httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36 Edg/80.0.361.50");
+
+            var requester = new ZenscrapeConcurrentCrawlerRequester(httpClient, GetFromConfig("ZenscrapeApiKey"));
+            //var requester = new HttpClientConcurrentCrawlerRequester(httpClient);
             //var requester = new PrerenderCloudConcurrentCrawlerRequester(httpClient);
             //var requester = new RendertronConcurrentCrawlerRequester(httpClient);
-            using var crawler = new Crawler(config, requester);
+            
+            //var requestQueue = new ChannelRequestQueue<RequestUrl>();
+            var requestQueue = new LockedRequestQueue();
+            
+            using var crawler = new Crawler(config, requester, requestQueue, cts.Token);
             var consumerTask = ConsumeCrawlerResultsAsync(crawler.ResultsChannelReader);
             var crawlerTask = crawler.CrawlAsync();
             await crawler.EnqueueAsync(baseUrl);
@@ -84,9 +86,9 @@ namespace AngleCrawlerCli
             Console.WriteLine($"Pages Crawled: {cnt}");
         }
 
-        static string GetZenscrapeApiKey() =>
+        static string GetFromConfig(string key) =>
             new ConfigurationBuilder()
                 .AddUserSecrets<Program>()
-                .Build()["ZenscrapeApiKey"];
+                .Build()[key];
     }
 }

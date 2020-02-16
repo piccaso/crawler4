@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using AngleSharp;
-using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
 using AngleSharp.Io;
 
@@ -20,8 +19,6 @@ namespace AngleCrawler
         public bool FollowInternalLinks { get; set; } = true;
         public int MaxRequestsPerCrawl { get; set; } = 500;
         public int MaxConcurrency { get; set; } = 1;
-        public IDictionary<string, string> RequestHeaders { get; set; } = new Dictionary<string, string>();
-        public CancellationToken CancellationToken { get; set; } = default;
         public int Retries { get; set; } = 5;
         public int DelayBetweenRetries { get; set; } = 1000;
     }
@@ -48,26 +45,26 @@ namespace AngleCrawler
     }
 
     public interface IConcurrentCrawlerRequester {
-        Task<IResponse> OpenAsync(string url, string referrer, IDictionary<string, string> requestHeaders, CancellationToken cancellationToken);
+        Task<IResponse> OpenAsync(string url, string referrer, CancellationToken cancellationToken);
     }
 
     public class Crawler : IDisposable {
         private readonly CrawlerConfig _config;
         private readonly IConcurrentCrawlerRequester _requester;
-        private readonly Channel<RequestUrl> _urlChannel = Channel.CreateUnbounded<RequestUrl>();
+        private readonly IRequestQueue<RequestUrl> _requestQueue;
         private readonly Channel<(CrawlerNode node, IList<CrawlerEdge> edges)> _resultsChannel = Channel.CreateUnbounded<(CrawlerNode node, IList<CrawlerEdge> edges)>();
         public ChannelReader<(CrawlerNode node, IList<CrawlerEdge> edges)> ResultsChannelReader => _resultsChannel.Reader;
         private readonly IConcurrentUrlStore _urlStore = new ConcurrentUrlStore();
         private readonly CancellationTokenSource _cts;
 
-        private long _channelSize = 0;
         private long _requestCount = 0;
         private long _activeWorkers = 0;
 
-        public Crawler(CrawlerConfig config, IConcurrentCrawlerRequester requester) {
+        public Crawler(CrawlerConfig config, IConcurrentCrawlerRequester requester, IRequestQueue<RequestUrl> requestQueue, CancellationToken cancellationToken) {
             _config = config;
             _requester = requester;
-            _cts = CancellationTokenSource.CreateLinkedTokenSource(_config.CancellationToken);
+            _requestQueue = requestQueue;
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         }
 
         public Task<bool> EnqueueAsync(string url, string referrer = null) {
@@ -75,18 +72,13 @@ namespace AngleCrawler
         }
 
         public async Task<bool> EnqueueAsync(RequestUrl requestUrl) {
-            var channelSize = Interlocked.Read(ref _channelSize);
+            requestUrl.Url = RemoveFragment(requestUrl.Url);
+            if (!_urlStore.Add(requestUrl.Url)) return false;
+            var channelSize = await _requestQueue.CountAsync(_cts.Token);
             var requestCount = Interlocked.Read(ref _requestCount);
             var activeWorkers = Interlocked.Read(ref _activeWorkers);
             if (channelSize + requestCount + activeWorkers > _config.MaxRequestsPerCrawl) return false;
-            try {
-                await _urlChannel.Writer.WriteAsync(requestUrl, _cts.Token);
-                Interlocked.Increment(ref _channelSize);
-                return true;
-            }
-            catch (ChannelClosedException) {
-                return false;
-            }
+            return await _requestQueue.EnqueueAsync(requestUrl, _cts.Token);
         }
 
         public async Task CrawlAsync() {
@@ -112,13 +104,13 @@ namespace AngleCrawler
             var statusChecksum = 0L;
             while (true) {
                 await Task.Delay(500);
-                var channelSize = Interlocked.Read(ref _channelSize);
+                var channelSize = await _requestQueue.CountAsync(_cts.Token);
                 var activeWorkers = Interlocked.Read(ref _activeWorkers);
                 var requestCount = Interlocked.Read(ref _requestCount);
                 if (channelSize <= 0 && activeWorkers <= 0) shutdownCount++;
                 else shutdownCount = 0;
-                if (shutdownCount > 3 || _cts.IsCancellationRequested) {
-                    _urlChannel.Writer.TryComplete();
+                if (shutdownCount > 4 || _cts.IsCancellationRequested) {
+                    await _requestQueue.CloseAsync(CancellationToken.None);
                     _resultsChannel.Writer.TryComplete();
                     return;
                 }
@@ -133,15 +125,15 @@ namespace AngleCrawler
         }
 
         private async Task WorkAsync() {
-            while (await _urlChannel.Reader.WaitToReadAsync(_cts.Token) && !_cts.IsCancellationRequested) {
-                if (!_urlChannel.Reader.TryRead(out var requestUrl)) continue;
-                Interlocked.Decrement(ref _channelSize);
+            while (!_cts.IsCancellationRequested) {
+                var (success, requestUrl) = await _requestQueue.DequeueAsync(_cts.Token);
+                if(!success) break;
+
                 var requestCount = Interlocked.Read(ref _requestCount);
                 if (requestCount >= _config.MaxRequestsPerCrawl) continue;
                 Interlocked.Increment(ref _activeWorkers);
                 try {
-                    requestUrl.Url = RemoveFragment(requestUrl.Url);
-                    if (_urlStore.Add(requestUrl.Url)) await ProcessUrlAsync(requestUrl);
+                    await ProcessUrlAsync(requestUrl);
                 }
                 finally {
                     Interlocked.Decrement(ref _activeWorkers);
@@ -164,7 +156,7 @@ namespace AngleCrawler
             var pseudoUrl = new PseudoUrl(_config.UrlFilter);
             try
             {
-                var (node, edges) = await Try.HarderAsync(_config.Retries, () => ProcessRequestAsync(requestUrl, _config.RequestHeaders), _config.DelayBetweenRetries);
+                var (node, edges) = await Try.HarderAsync(_config.Retries, () => ProcessRequestAsync(requestUrl), _config.DelayBetweenRetries);
                 node.External = !pseudoUrl.Match(node.Url);
                 Interlocked.Increment(ref _requestCount);
                 await WriteResultAsync(node, edges);
@@ -180,8 +172,10 @@ namespace AngleCrawler
                     else if(!childExternal && parentExternal && _config.CheckExternalLinks) {
                         takeIt = true;
                     }
-
-                    if(takeIt) await EnqueueAsync(edge.Child, edge.Parent);
+                    
+                    if (takeIt) {
+                        await EnqueueAsync(edge.Child, edge.Parent);
+                    }
                 }
             }
             catch (Exception e) {
@@ -196,12 +190,12 @@ namespace AngleCrawler
             }
         }
 
-        private async Task<(CrawlerNode node, IList<CrawlerEdge> edges)> ProcessRequestAsync(RequestUrl requestUrl, IDictionary<string, string> requestHeaders) {
+        private async Task<(CrawlerNode node, IList<CrawlerEdge> edges)> ProcessRequestAsync(RequestUrl requestUrl) {
             var stopwatch = new Stopwatch();
             var edges = new List<CrawlerEdge>();
             var node = new CrawlerNode();
             stopwatch.Start();
-            var response = await _requester.OpenAsync(requestUrl.Url, requestUrl.Referrer, requestHeaders, _cts.Token);
+            var response = await _requester.OpenAsync(requestUrl.Url, requestUrl.Referrer, _cts.Token);
             stopwatch.Stop();
             node.LoadTimeSeconds = stopwatch.Elapsed.TotalSeconds;
             var context = BrowsingContext.New();
