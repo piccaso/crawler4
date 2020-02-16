@@ -4,12 +4,11 @@ using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using AngleCrawler;
+using Microsoft.Extensions.Configuration;
 
 namespace AngleCrawlerCli
 {
@@ -23,19 +22,18 @@ namespace AngleCrawlerCli
                 e.Cancel = true;
             };
 
-            //var baseUrl = "https://www.acolono.com/";
+            var baseUrl = "https://www.acolono.com/";
             //var baseUrl = "https://orf.at/";
-            var baseUrl = "https://www.ichkoche.at/";
+            //var baseUrl = "https://www.ichkoche.at/";
             //var baseUrl = "https://www.ichkoche.at/facebook-login";
             //var baseUrl = "https://failblog.cheezburger.com/";
             //var baseUrl = "https://ld.m.887.at/p";
-            //var baseUrl = "https://endlq9qkj597t.x.pipedream.net/";
             var config = new CrawlerConfig {
                 CancellationToken = cts.Token,
                 UrlFilter = $"[^]{baseUrl}[.*]",
                 //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
                 MaxConcurrency = Environment.ProcessorCount * 2,
-                MaxRequestsPerCrawl = 100,
+                MaxRequestsPerCrawl = 1000,
                 RequestHeaders = {
                     {"accept","text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"},
                     {"accept-language", "en-US,en;q=0.9,de;q=0.8,de-AT;q=0.7"},
@@ -49,14 +47,16 @@ namespace AngleCrawlerCli
             };
 
             using var httpClient = new HttpClient(handler);
-            using var crawler = new Crawler(config, new RendertronConcurrentCrawlerRequester(httpClient));
-            var consumerTask = ConsumeCrawlerResultsAsync(crawler.ResultsChannel.Reader);
+            //var requester = new ZenscrapeConcurrentCrawlerRequester(httpClient, GetZenscrapeApiKey());
+            var requester = new HttpClientConcurrentCrawlerRequester(httpClient);
+            //var requester = new RendertronConcurrentCrawlerRequester(httpClient);
+            using var crawler = new Crawler(config, requester);
+            var consumerTask = ConsumeCrawlerResultsAsync(crawler.ResultsChannelReader);
             var crawlerTask = crawler.CrawlAsync();
             await crawler.EnqueueAsync(baseUrl);
             crawler.OnStatus += OnStatusAction;
 
             await Task.WhenAll(consumerTask, crawlerTask);
-
         }
 
         private static void OnStatusAction((long channelSize, long activeWorkers, long requestCount) args) {
@@ -66,18 +66,24 @@ namespace AngleCrawlerCli
         static async Task ConsumeCrawlerResultsAsync(ChannelReader<(CrawlerNode node, IList<CrawlerEdge> edges)> results) {
             var cnt = 0;
             await foreach (var (node, edges) in results.ReadAllAsync()) {
-                if (Debugger.IsAttached && node.Url.Contains("facebook.com")) {
-                    Debugger.Break();
-                }
+                //if (Debugger.IsAttached && node.Url.Contains("facebook.com")) {
+                //    Debugger.Break();
+                //}
                 var redirect = edges.FirstOrDefault(e => e.Relation == "redirect");
                 if (redirect != null) {
-                    Console.WriteLine($"30X {redirect.Parent} -> {redirect.Child}");
+                    Console.WriteLine($"30? {redirect.Parent} -> {redirect.Child}");
                 }
-                Console.WriteLine($"{node.Status:000}{(node.External ? " X":"")} {node.Url} edges={edges.Count} time={node.LoadTimeSeconds:0.0}s");
+                Console.WriteLine($"{node.Status:000}{(node.External ? " X":"")} {node.Url} edges={edges.Count} time={node.LoadTimeSeconds:0.00}s");
+                if(!string.IsNullOrEmpty(node.Error)) Console.WriteLine($"ERR {node.Error}");
                 cnt++;
             }
 
             Console.WriteLine($"Pages Crawled: {cnt}");
         }
+
+        static string GetZenscrapeApiKey() =>
+            new ConfigurationBuilder()
+                .AddUserSecrets<Program>()
+                .Build()["ZenscrapeApiKey"];
     }
 }

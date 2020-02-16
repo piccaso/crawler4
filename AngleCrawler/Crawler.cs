@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using AngleSharp;
 using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
+using AngleSharp.Io;
 
 namespace AngleCrawler
 {
@@ -37,7 +38,7 @@ namespace AngleCrawler
         public bool External { get; set; }
         public string Error { get; set; }
         public double LoadTimeSeconds { get; set; }
-        public IList<(string Key, string value)> Headers { get; set; }
+        public IDictionary<string, string> Headers { get; set; }
     }
 
     public class CrawlerEdge {
@@ -47,22 +48,15 @@ namespace AngleCrawler
     }
 
     public interface IConcurrentCrawlerRequester {
-        Task<AngleSharpHelper.ExtendedDocument> OpenAsync(string url, string referrer,
-            IDictionary<string, string> requestHeaders, CancellationToken cancellationToken);
-    }
-
-    public class AngleSharpConcurrentCrawlerRequester : IConcurrentCrawlerRequester {
-        public Task<AngleSharpHelper.ExtendedDocument> OpenAsync(string url, string referrer, IDictionary<string, string> requestHeaders, CancellationToken cancellationToken) {
-            var ctx = AngleSharpHelper.DefaultContext(null, requestHeaders);
-            return ctx.OpenAsyncExt(url, referrer, cancellationToken);
-        }
+        Task<IResponse> OpenAsync(string url, string referrer, IDictionary<string, string> requestHeaders, CancellationToken cancellationToken);
     }
 
     public class Crawler : IDisposable {
         private readonly CrawlerConfig _config;
         private readonly IConcurrentCrawlerRequester _requester;
         private readonly Channel<RequestUrl> _urlChannel = Channel.CreateUnbounded<RequestUrl>();
-        public readonly Channel<(CrawlerNode node, IList<CrawlerEdge> edges)> ResultsChannel = Channel.CreateUnbounded<(CrawlerNode node, IList<CrawlerEdge> edges)>();
+        private readonly Channel<(CrawlerNode node, IList<CrawlerEdge> edges)> _resultsChannel = Channel.CreateUnbounded<(CrawlerNode node, IList<CrawlerEdge> edges)>();
+        public ChannelReader<(CrawlerNode node, IList<CrawlerEdge> edges)> ResultsChannelReader => _resultsChannel.Reader;
         private readonly IConcurrentUrlStore _urlStore = new ConcurrentUrlStore();
         private readonly CancellationTokenSource _cts;
 
@@ -125,7 +119,7 @@ namespace AngleCrawler
                 else shutdownCount = 0;
                 if (shutdownCount > 3 || _cts.IsCancellationRequested) {
                     _urlChannel.Writer.TryComplete();
-                    ResultsChannel.Writer.TryComplete();
+                    _resultsChannel.Writer.TryComplete();
                     return;
                 }
 
@@ -158,7 +152,7 @@ namespace AngleCrawler
         private async Task<bool> WriteResultAsync(CrawlerNode node, IList<CrawlerEdge> edges) {
             try
             {
-                await ResultsChannel.Writer.WriteAsync((node, edges), _cts.Token);
+                await _resultsChannel.Writer.WriteAsync((node, edges), _cts.Token);
                 return true;
             }
             catch (ChannelClosedException) {
@@ -210,7 +204,8 @@ namespace AngleCrawler
             var response = await _requester.OpenAsync(requestUrl.Url, requestUrl.Referrer, requestHeaders, _cts.Token);
             stopwatch.Stop();
             node.LoadTimeSeconds = stopwatch.Elapsed.TotalSeconds;
-            using var doc = response.Document;
+            var context = BrowsingContext.New();
+            using var doc = await context.OpenAsync(response, _cts.Token);
             node.Url = doc.Url;
             void AddEdge(string child, string relation, string parent = null) => edges.Add(new CrawlerEdge {Child = child, Parent = parent ?? node.Url, Relation = relation});
             var contentType = doc.ContentType;
@@ -222,8 +217,8 @@ namespace AngleCrawler
             if (requestUrl.Url != node.Url) {
                 AddEdge(node.Url, "redirect", requestUrl.Url);
             }
-            node.Status = response.StatusCode;
-            node.Headers = (from header in response.Headers from value in header.Value select (header.Key, value)).ToList();
+            node.Status = (int)response.StatusCode;
+            node.Headers = response.Headers;
             
             if (contentTypeOk) {
                 var links = doc.QuerySelectorAll("a").OfType<IHtmlAnchorElement>();
@@ -235,7 +230,8 @@ namespace AngleCrawler
                 }
                 node.Html = doc.Source.Text;
             }
-            
+
+            await response.Content.DisposeAsync();
             return (node, edges);
         }
 
