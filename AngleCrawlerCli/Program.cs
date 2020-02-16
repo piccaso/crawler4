@@ -47,8 +47,8 @@ namespace AngleCrawlerCli
             httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9,de;q=0.8,de-AT;q=0.7");
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36 Edg/80.0.361.50");
 
-            var requester = new ZenscrapeConcurrentCrawlerRequester(httpClient, GetFromConfig("ZenscrapeApiKey"));
-            //var requester = new HttpClientConcurrentCrawlerRequester(httpClient);
+            //var requester = new ZenscrapeConcurrentCrawlerRequester(httpClient, GetFromConfig("ZenscrapeApiKey"));
+            var requester = new HttpClientConcurrentCrawlerRequester(httpClient);
             //var requester = new PrerenderCloudConcurrentCrawlerRequester(httpClient);
             //var requester = new RendertronConcurrentCrawlerRequester(httpClient);
             
