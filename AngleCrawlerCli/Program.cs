@@ -91,7 +91,7 @@ namespace AngleCrawlerCli
             var proc = Process.GetCurrentProcess();
             Console.WriteLine($"PeakWorkingSet64: {FormatBytes(proc.PeakWorkingSet64)}");
             Console.WriteLine($"GC.peakAllocatedBytes: {FormatBytes(_peakAllocatedBytes)}");
-            Console.WriteLine($"GC.AllAllocations: {GC.GetTotalAllocatedBytes(true)}");
+            Console.WriteLine($"GC.AllAllocations: {FormatBytes(GC.GetTotalAllocatedBytes(true))}");
             Console.WriteLine($"PeakVirtualMemorySize64: {FormatBytes(proc.PeakVirtualMemorySize64)}");
         }
 
