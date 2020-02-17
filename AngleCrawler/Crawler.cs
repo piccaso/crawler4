@@ -77,7 +77,7 @@ namespace AngleCrawler
             var channelSize = await _requestQueue.CountAsync(_cts.Token);
             var requestCount = Interlocked.Read(ref _requestCount);
             var activeWorkers = Interlocked.Read(ref _activeWorkers);
-            if (channelSize + requestCount + activeWorkers > _config.MaxRequestsPerCrawl) return false;
+            if (channelSize + requestCount + activeWorkers >= _config.MaxRequestsPerCrawl) return false;
             return await _requestQueue.EnqueueAsync(requestUrl, _cts.Token);
         }
 
@@ -195,7 +195,7 @@ namespace AngleCrawler
             var edges = new List<CrawlerEdge>();
             var node = new CrawlerNode();
             stopwatch.Start();
-            var response = await _requester.OpenAsync(requestUrl.Url, requestUrl.Referrer, _cts.Token);
+            using var response = await _requester.OpenAsync(requestUrl.Url, requestUrl.Referrer, _cts.Token);
             stopwatch.Stop();
             node.LoadTimeSeconds = stopwatch.Elapsed.TotalSeconds;
             var context = BrowsingContext.New();
@@ -225,7 +225,6 @@ namespace AngleCrawler
                 node.Html = doc.Source.Text;
             }
 
-            await response.Content.DisposeAsync();
             return (node, edges);
         }
 

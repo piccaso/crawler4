@@ -30,7 +30,7 @@ namespace AngleCrawler
             await response.Content.CopyToAsync(contentStream);
             contentStream.Seek(0, SeekOrigin.Begin);
             return new DefaultResponse {
-                Headers = response.Headers.ToDictionary(k => k.Key, v => string.Join(", ", v)),
+                Headers = response.Headers.ToDictionary(k => k.Key, v => string.Join(", ", v.Value)),
                 StatusCode = response.StatusCode,
                 Address = new Url(response.RequestMessage.RequestUri.ToString()),
                 Content = contentStream,

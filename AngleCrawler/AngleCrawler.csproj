@@ -7,6 +7,7 @@
   <ItemGroup>
     <PackageReference Include="System.Threading.Channels" Version="4.7.0" />
     <PackageReference Include="AngleSharp" Version="0.14.0-alpha-789" />
+    <PackageReference Include="System.Text.Json" Version="4.7.0" />
   </ItemGroup>
 
 </Project>

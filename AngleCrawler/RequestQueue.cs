@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -47,6 +48,25 @@ namespace AngleCrawler {
             var close = _channel.Writer.TryComplete();
             return Task.FromResult(close);
         }
+    }
+
+    public class Utf8ChannelRequestQueue<T> : IRequestQueue<T> {
+        private readonly IRequestQueue<byte[]> _channelRequestQueue = new ChannelRequestQueue<byte[]>();
+
+        public Task<bool> EnqueueAsync(T requestUrl, CancellationToken cancellationToken) {
+            var b = JsonSerializer.SerializeToUtf8Bytes(requestUrl);
+            return _channelRequestQueue.EnqueueAsync(b, cancellationToken);
+        }
+
+        public async Task<(bool success, T item)> DequeueAsync(CancellationToken cancellationToken) {
+            var (success, b) = await _channelRequestQueue.DequeueAsync(cancellationToken);
+            if (!success) return (false, default);
+            var item = JsonSerializer.Deserialize<T>(b);
+            return (true, item);
+        }
+
+        public Task<long> CountAsync(CancellationToken cancellationToken) => _channelRequestQueue.CountAsync(cancellationToken);
+        public Task<bool> CloseAsync(CancellationToken cancellationToken) => _channelRequestQueue.CloseAsync(cancellationToken);
     }
 
     public class LockedRequestQueue : IRequestQueue<RequestUrl> {

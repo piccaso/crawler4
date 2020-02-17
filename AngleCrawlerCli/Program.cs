@@ -22,19 +22,19 @@ namespace AngleCrawlerCli
                 e.Cancel = true;
             };
 
-            //var baseUrl = "https://kraftner.com/";
+            var baseUrl = "https://kraftner.com/";
             //var baseUrl = "https://www.acolono.com/";
             //var baseUrl = "https://orf.at/";
             //var baseUrl = "https://www.ichkoche.at/";
             //var baseUrl = "https://www.ichkoche.at/facebook-login";
             //var baseUrl = "https://failblog.cheezburger.com/";
-            var baseUrl = "https://ld.m.887.at/p";
+            //var baseUrl = "https://ld.m.887.at/p";
             //var baseUrl = "https://endlq9qkj597t.x.pipedream.net/";
             var config = new CrawlerConfig {
                 UrlFilter = $"[^]{baseUrl}[.*]",
                 //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
-                MaxConcurrency = Environment.ProcessorCount * 2,
-                MaxRequestsPerCrawl = 200_000,
+                MaxConcurrency = 2,
+                MaxRequestsPerCrawl = 640_000,
             };
             var cc = new CookieContainer();
             using var handler = new HttpClientHandler {
@@ -47,13 +47,15 @@ namespace AngleCrawlerCli
             httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9,de;q=0.8,de-AT;q=0.7");
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36 Edg/80.0.361.50");
 
-            //var requester = new ZenscrapeConcurrentCrawlerRequester(httpClient, GetFromConfig("ZenscrapeApiKey"));
             var requester = new HttpClientConcurrentCrawlerRequester(httpClient);
+            //var requester = new ZenscrapeConcurrentCrawlerRequester(httpClient, GetFromConfig("ZenscrapeApiKey"));
             //var requester = new PrerenderCloudConcurrentCrawlerRequester(httpClient);
             //var requester = new RendertronConcurrentCrawlerRequester(httpClient);
-            
+            //var requester = new ProxyCrawlConcurrentCrawlerRequester(httpClient, GetFromConfig("ProxyCrawlApiKey"));
+
             //var requestQueue = new ChannelRequestQueue<RequestUrl>();
-            var requestQueue = new LockedRequestQueue();
+            var requestQueue = new Utf8ChannelRequestQueue<RequestUrl>();
+            //var requestQueue = new LockedRequestQueue();
             
             using var crawler = new Crawler(config, requester, requestQueue, cts.Token);
             var consumerTask = ConsumeCrawlerResultsAsync(crawler.ResultsChannelReader);
@@ -89,10 +91,10 @@ namespace AngleCrawlerCli
 
             Console.WriteLine($"Pages Crawled: {cnt}");
             var proc = Process.GetCurrentProcess();
-            Console.WriteLine($"PeakWorkingSet64: {FormatBytes(proc.PeakWorkingSet64)}");
+            Console.WriteLine($"Process.PeakWorkingSet: {FormatBytes(proc.PeakWorkingSet64)}");
+            Console.WriteLine($"Process.PeakPagedMemorySize: {FormatBytes(proc.PeakPagedMemorySize64)}");
             Console.WriteLine($"GC.peakAllocatedBytes: {FormatBytes(_peakAllocatedBytes)}");
             Console.WriteLine($"GC.AllAllocations: {FormatBytes(GC.GetTotalAllocatedBytes(true))}");
-            Console.WriteLine($"PeakVirtualMemorySize64: {FormatBytes(proc.PeakVirtualMemorySize64)}");
         }
 
         static string GetFromConfig(string key) =>
