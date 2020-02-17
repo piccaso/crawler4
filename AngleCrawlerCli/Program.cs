@@ -34,7 +34,7 @@ namespace AngleCrawlerCli
                 UrlFilter = $"[^]{baseUrl}[.*]",
                 //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
                 MaxConcurrency = Environment.ProcessorCount * 2,
-                MaxRequestsPerCrawl = 200_000,
+                MaxRequestsPerCrawl = 500_000,
             };
             var cc = new CookieContainer();
             using var handler = new HttpClientHandler {
@@ -52,8 +52,8 @@ namespace AngleCrawlerCli
             //var requester = new PrerenderCloudConcurrentCrawlerRequester(httpClient);
             //var requester = new RendertronConcurrentCrawlerRequester(httpClient);
             
-            //var requestQueue = new ChannelRequestQueue<RequestUrl>();
-            var requestQueue = new LockedRequestQueue();
+            var requestQueue = new ChannelRequestQueue<RequestUrl>();
+            //var requestQueue = new LockedRequestQueue();
             
             using var crawler = new Crawler(config, requester, requestQueue, cts.Token);
             var consumerTask = ConsumeCrawlerResultsAsync(crawler.ResultsChannelReader);
@@ -89,10 +89,9 @@ namespace AngleCrawlerCli
 
             Console.WriteLine($"Pages Crawled: {cnt}");
             var proc = Process.GetCurrentProcess();
-            Console.WriteLine($"PeakWorkingSet64: {FormatBytes(proc.PeakWorkingSet64)}");
+            Console.WriteLine($"Process.PeakWorkingSet: {FormatBytes(proc.PeakWorkingSet64)}");
             Console.WriteLine($"GC.peakAllocatedBytes: {FormatBytes(_peakAllocatedBytes)}");
             Console.WriteLine($"GC.AllAllocations: {FormatBytes(GC.GetTotalAllocatedBytes(true))}");
-            Console.WriteLine($"PeakVirtualMemorySize64: {FormatBytes(proc.PeakVirtualMemorySize64)}");
         }
 
         static string GetFromConfig(string key) =>
