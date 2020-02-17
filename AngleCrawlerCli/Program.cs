@@ -64,8 +64,12 @@ namespace AngleCrawlerCli
             await Task.WhenAll(consumerTask, crawlerTask);
         }
 
+        private static long _peakAllocatedBytes;
+
         private static void OnStatusAction((long channelSize, long activeWorkers, long requestCount) args) {
-            Console.WriteLine($"q:{args.channelSize}, w:{args.activeWorkers}, cnt:{args.requestCount}");
+            var ab = GC.GetTotalAllocatedBytes(true);
+            if (ab > _peakAllocatedBytes) _peakAllocatedBytes = ab;
+            Console.WriteLine($"q:{args.channelSize}, w:{args.activeWorkers}, cnt:{args.requestCount} ab:{FormatBytes(ab)}");
         }
 
         static async Task ConsumeCrawlerResultsAsync(ChannelReader<(CrawlerNode node, IList<CrawlerEdge> edges)> results) {
@@ -84,11 +88,27 @@ namespace AngleCrawlerCli
             }
 
             Console.WriteLine($"Pages Crawled: {cnt}");
+            var proc = Process.GetCurrentProcess();
+            Console.WriteLine($"PeakWorkingSet64: {FormatBytes(proc.PeakWorkingSet64)}");
+            Console.WriteLine($"PeakVirtualMemorySize64: {FormatBytes(proc.PeakVirtualMemorySize64)}");
+            Console.WriteLine($"GC.peakAllocatedBytes: {FormatBytes(_peakAllocatedBytes)}");
         }
 
         static string GetFromConfig(string key) =>
             new ConfigurationBuilder()
                 .AddUserSecrets<Program>()
                 .Build()[key];
+
+        private static string FormatBytes(long bytes) {
+            var len = Convert.ToDecimal(bytes);
+            string[] sizes = {"B", "KB", "MB", "GB", "TB"};
+            var order = 0;
+            while (len >= 1024 && order < sizes.Length - 1) {
+                order++;
+                len /= 1024;
+            }
+
+            return $"{len:0.###} {sizes[order]}";
+        }
     }
 }
