@@ -33,7 +33,7 @@ namespace AngleCrawlerCli
             var config = new CrawlerConfig {
                 UrlFilter = $"[^]{baseUrl}[.*]",
                 //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
-                MaxConcurrency = 2,
+                MaxConcurrency = Environment.ProcessorCount,
                 MaxRequestsPerCrawl = 640_000,
             };
             var cc = new CookieContainer();
