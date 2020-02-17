@@ -67,7 +67,7 @@ namespace AngleCrawlerCli
         private static long _peakAllocatedBytes;
 
         private static void OnStatusAction((long channelSize, long activeWorkers, long requestCount) args) {
-            var ab = GC.GetTotalAllocatedBytes(true);
+            var ab = GC.GetTotalMemory(true);
             if (ab > _peakAllocatedBytes) _peakAllocatedBytes = ab;
             Console.WriteLine($"q:{args.channelSize}, w:{args.activeWorkers}, cnt:{args.requestCount} ab:{FormatBytes(ab)}");
         }
@@ -90,8 +90,9 @@ namespace AngleCrawlerCli
             Console.WriteLine($"Pages Crawled: {cnt}");
             var proc = Process.GetCurrentProcess();
             Console.WriteLine($"PeakWorkingSet64: {FormatBytes(proc.PeakWorkingSet64)}");
-            Console.WriteLine($"PeakVirtualMemorySize64: {FormatBytes(proc.PeakVirtualMemorySize64)}");
             Console.WriteLine($"GC.peakAllocatedBytes: {FormatBytes(_peakAllocatedBytes)}");
+            Console.WriteLine($"GC.AllAllocations: {GC.GetTotalAllocatedBytes(true)}");
+            Console.WriteLine($"PeakVirtualMemorySize64: {FormatBytes(proc.PeakVirtualMemorySize64)}");
         }
 
         static string GetFromConfig(string key) =>
