@@ -27,7 +27,7 @@ namespace AngleCrawler {
                 }
                 catch {
                     howHard--;
-                    if (howHard > 0) {
+                    if (howHard > 0 && !ct.IsCancellationRequested) {
                         await Task.Delay(delayBetween, ct);
                         continue;
                     }

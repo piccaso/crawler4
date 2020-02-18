@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -22,10 +24,10 @@ namespace AngleCrawlerCli
                 e.Cancel = true;
             };
 
-            var baseUrl = "https://kraftner.com/";
+            //var baseUrl = "https://kraftner.com/";
             //var baseUrl = "https://www.acolono.com/";
             //var baseUrl = "https://orf.at/";
-            //var baseUrl = "https://www.ichkoche.at/";
+            var baseUrl = "https://www.ichkoche.at/";
             //var baseUrl = "https://www.ichkoche.at/facebook-login";
             //var baseUrl = "https://failblog.cheezburger.com/";
             //var baseUrl = "https://ld.m.887.at/p";
@@ -33,7 +35,7 @@ namespace AngleCrawlerCli
             var config = new CrawlerConfig {
                 UrlFilter = $"[^]{baseUrl}[.*]",
                 //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
-                MaxConcurrency = Environment.ProcessorCount,
+                MaxConcurrency = 1,
                 MaxRequestsPerCrawl = 640_000,
             };
             var cc = new CookieContainer();
@@ -74,25 +76,39 @@ namespace AngleCrawlerCli
             Console.WriteLine($"q:{args.channelSize}, w:{args.activeWorkers}, cnt:{args.requestCount} ab:{FormatBytes(ab)}");
         }
 
-        static async Task ConsumeCrawlerResultsAsync(ChannelReader<(CrawlerNode node, IList<CrawlerEdge> edges)> results) {
+        static async Task ConsumeCrawlerResultsAsync(ChannelReader<CrawlerResult> results) {
             var cnt = 0;
-            await foreach (var (node, edges) in results.ReadAllAsync()) {
+            await foreach (var r in results.ReadAllAsync()) {
                 //if (Debugger.IsAttached && node.Url.Contains("facebook.com")) {
                 //    Debugger.Break();
                 //}
-                var redirect = edges.FirstOrDefault(e => e.Relation == "redirect");
+                var redirect = r.Edges.FirstOrDefault(e => e.Relation == "redirect");
                 if (redirect != null) {
                     Console.WriteLine($"30? {redirect.Parent} -> {redirect.Child}");
                 }
-                Console.WriteLine($"{node.Status:000}{(node.External ? " X":"")} {node.Url} edges={edges.Count} time={node.LoadTimeSeconds:0.00}s");
-                if(!string.IsNullOrEmpty(node.Error)) Console.WriteLine($"ERR {node.Error}");
+                Console.WriteLine($"{r.Node.Status:000}{(r.Node.External ? " X":"")} {r.Node.Url} edges={r.Edges.Count} time={r.Node.LoadTimeSeconds:0.00}s");
+                if(!string.IsNullOrEmpty(r.Node.Error)) Console.WriteLine($"ERR {r.Node.Error}");
+
+                if(cnt % 200 == 0) PrintMemoryStatistics();
+
+                if (Directory.Exists("store")) {
+                    var fn = $"store/{cnt:x8}.json";
+                    var bytes = JsonSerializer.SerializeToUtf8Bytes(r,
+                        new JsonSerializerOptions {IgnoreNullValues = true, WriteIndented = true});
+                    await File.WriteAllBytesAsync(fn, bytes);
+                }
+
                 cnt++;
             }
 
             Console.WriteLine($"Pages Crawled: {cnt}");
+            PrintMemoryStatistics();
+        }
+
+        static void PrintMemoryStatistics() {
             var proc = Process.GetCurrentProcess();
             Console.WriteLine($"Process.PeakWorkingSet: {FormatBytes(proc.PeakWorkingSet64)}");
-            Console.WriteLine($"Process.PeakPagedMemorySize: {FormatBytes(proc.PeakPagedMemorySize64)}");
+            if(proc.PeakPagedMemorySize64 > 0) Console.WriteLine($"Process.PeakPagedMemorySize: {FormatBytes(proc.PeakPagedMemorySize64)}");
             Console.WriteLine($"GC.peakAllocatedBytes: {FormatBytes(_peakAllocatedBytes)}");
             Console.WriteLine($"GC.AllAllocations: {FormatBytes(GC.GetTotalAllocatedBytes(true))}");
         }

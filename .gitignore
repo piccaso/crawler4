@@ -340,3 +340,4 @@ ASALocalRun/
 healthchecksdb
 
 docker-compose.override.yml
+store/

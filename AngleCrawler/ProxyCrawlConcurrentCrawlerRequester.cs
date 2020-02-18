@@ -34,7 +34,17 @@ namespace AngleCrawler {
                 }
             }
 
-            var response = await _requester.OpenAsync(sb.ToString(), referrer, cancellationToken);
+            IResponse response;
+            do {
+                response = await _requester.OpenAsync(sb.ToString(), referrer, cancellationToken);
+                if (response.StatusCode == HttpStatusCode.TooManyRequests) {
+                    response.Dispose();
+                    response = null;
+                    await Task.Delay(1500, cancellationToken);
+                }
+            } while (response == null);
+
+            
             if (response.StatusCode == HttpStatusCode.TooManyRequests) throw new Exception("To many requests");
             var headers = new Dictionary<string, string>();
             foreach (var (name, value) in response.Headers) {
