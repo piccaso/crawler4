@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -92,10 +93,12 @@ namespace AngleCrawlerCli
                 if(cnt % 200 == 0) PrintMemoryStatistics();
 
                 if (Directory.Exists("store")) {
-                    var fn = $"store/{cnt:x8}.json";
+                    var fn = $"store/{cnt:x8}.json.gz";
                     var bytes = JsonSerializer.SerializeToUtf8Bytes(r,
                         new JsonSerializerOptions {IgnoreNullValues = true, WriteIndented = true});
-                    await File.WriteAllBytesAsync(fn, bytes);
+                    await using var file = File.OpenWrite(fn);
+                    await using var stream = new GZipStream(file, CompressionMode.Compress);
+                    await stream.WriteAsync(bytes);
                 }
 
                 cnt++;
