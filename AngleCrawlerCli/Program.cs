@@ -36,7 +36,13 @@ namespace AngleCrawlerCli
             var config = new CrawlerConfig {
                 UrlFilter = $"{baseUrl}[.*]",
                 //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
-                ExcludeFilters = {"[.*]//[[^/]+]/login?return=[.*]", "[.*]//[[^/]+]/facebook-login", "[.*]//[[^/]+]/print/"},
+                ExcludeFilters = {
+                    "[.*]//[[^/]+]/login?return=[.*]", 
+                    "[.*]//[[^/]+]/facebook-login", 
+                    "[.*]//[[^/]+]/print/", 
+                    "[.*]//[[^/]+]/[.*]recipe_pdf[.*]",
+                    "[.*]//[[^/]+]/recipe/[.*]/pdf",
+                },
                 MaxConcurrency = 2,
                 MaxRequestsPerCrawl = 655_360,
             };
