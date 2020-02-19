@@ -15,6 +15,7 @@ namespace AngleCrawler
 {
     public class CrawlerConfig {
         public string UrlFilter { get; set; }
+        public ICollection<string> ExcludeFilters { get; set; } = new List<string>();
         public bool CheckExternalLinks { get; set; }
         public bool FollowInternalLinks { get; set; } = true;
         public int MaxRequestsPerCrawl { get; set; } = 500;
@@ -62,6 +63,7 @@ namespace AngleCrawler
         public ChannelReader<CrawlerResult> ResultsChannelReader => _resultsChannel.Reader;
         private readonly IConcurrentUrlStore _urlStore = new ConcurrentUrlStore();
         private readonly CancellationTokenSource _cts;
+        private readonly PseudoUrl[] _excludeFilters;
 
         private long _requestCount = 0;
         private long _activeWorkers = 0;
@@ -71,6 +73,7 @@ namespace AngleCrawler
             _requester = requester;
             _requestQueue = requestQueue;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _excludeFilters = config.ExcludeFilters.Select(x => new PseudoUrl(x)).ToArray();
         }
 
         public Task<bool> EnqueueAsync(string url, string referrer = null) {
@@ -79,6 +82,9 @@ namespace AngleCrawler
 
         public async Task<bool> EnqueueAsync(RequestUrl requestUrl) {
             requestUrl.Url = RemoveFragment(requestUrl.Url);
+            foreach (var excludeFilter in _excludeFilters) {
+                if (excludeFilter.Match(requestUrl.Url)) return false;
+            }
             if (!_urlStore.Add(requestUrl.Url)) return false;
             var channelSize = await _requestQueue.CountAsync(_cts.Token);
             var requestCount = Interlocked.Read(ref _requestCount);
@@ -169,7 +175,6 @@ namespace AngleCrawler
                 Interlocked.Increment(ref _requestCount);
                 await WriteResultAsync(node, edges);
                 foreach (var edge in edges) {
-                    if(edge.Relation == "redirect") continue; // bin there, done that!
                     var childExternal = !pseudoUrl.Match(edge.Child);
                     var parentExternal = !pseudoUrl.Match(edge.Parent);
                     var takeIt = false;
@@ -218,6 +223,7 @@ namespace AngleCrawler
 
             if (requestUrl.Url != node.Url) {
                 AddEdge(node.Url, "redirect", requestUrl.Url);
+                _urlStore.Add(node.Url);
             }
             node.Status = (int)response.StatusCode;
             node.Headers = new Dictionary<string, string>(response.Headers);

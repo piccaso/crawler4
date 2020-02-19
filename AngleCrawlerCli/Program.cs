@@ -34,10 +34,11 @@ namespace AngleCrawlerCli
             //var baseUrl = "https://ld.m.887.at/p";
             //var baseUrl = "https://endlq9qkj597t.x.pipedream.net/";
             var config = new CrawlerConfig {
-                UrlFilter = $"[^]{baseUrl}[.*]",
+                UrlFilter = $"{baseUrl}[.*]",
                 //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
-                MaxConcurrency = 1,
-                MaxRequestsPerCrawl = 640_000,
+                ExcludeFilters = {"[.*]//[[^/]+]/login?return=[.*]", "[.*]//[[^/]+]/facebook-login", "[.*]//[[^/]+]/print/"},
+                MaxConcurrency = 2,
+                MaxRequestsPerCrawl = 655_360,
             };
             var cc = new CookieContainer();
             using var handler = new HttpClientHandler {
@@ -78,6 +79,8 @@ namespace AngleCrawlerCli
         }
 
         static async Task ConsumeCrawlerResultsAsync(ChannelReader<CrawlerResult> results) {
+            var sw = new Stopwatch();
+            sw.Start();
             var cnt = 0;
             await foreach (var r in results.ReadAllAsync()) {
                 //if (Debugger.IsAttached && node.Url.Contains("facebook.com")) {
@@ -103,8 +106,11 @@ namespace AngleCrawlerCli
 
                 cnt++;
             }
+            sw.Stop();
 
             Console.WriteLine($"Pages Crawled: {cnt}");
+            Console.WriteLine($"Elapsed Time: {sw.Elapsed}");
+            Console.WriteLine($"Pages Crawled/Minute: {cnt / sw.Elapsed.TotalMinutes}");
             PrintMemoryStatistics();
         }
 
