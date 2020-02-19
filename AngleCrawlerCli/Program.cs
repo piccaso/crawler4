@@ -38,7 +38,7 @@ namespace AngleCrawlerCli
                 //UrlFilter = "https://[[^/]*][\\.?]orf.at/[.*]",
                 ExcludeFilters = {
                     "[.*]//[[^/]+]/login?return=[.*]", 
-                    "[.*]//[[^/]+]/facebook-login", 
+                    "[.*]//[[^/]+]/facebook-login[.*]",
                     "[.*]//[[^/]+]/print/", 
                     "[.*]//[[^/]+]/[.*]recipe_pdf[.*]",
                     "[.*]//[[^/]+]/recipe/[.*]/pdf",
@@ -67,7 +67,7 @@ namespace AngleCrawlerCli
             var requestQueue = new Utf8ChannelRequestQueue<RequestUrl>();
             //var requestQueue = new LockedRequestQueue();
             
-            using var crawler = new Crawler(config, requester, requestQueue, cts.Token);
+            using var crawler = new Crawler(config, requester, requestQueue, null, cts.Token);
             var consumerTask = ConsumeCrawlerResultsAsync(crawler.ResultsChannelReader);
             var crawlerTask = crawler.CrawlAsync();
             await crawler.EnqueueAsync(baseUrl);

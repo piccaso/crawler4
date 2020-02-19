@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using AngleSharp;
+using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
 using AngleSharp.Io;
 
@@ -55,10 +56,15 @@ namespace AngleCrawler
         Task<IResponse> OpenAsync(string url, string referrer, CancellationToken cancellationToken);
     }
 
+    public interface ICustomProcessor {
+        Task ProcessAsync(IDocument document, CrawlerNode node, IList<CrawlerEdge> edges);
+    }
+
     public class Crawler : IDisposable {
         private readonly CrawlerConfig _config;
         private readonly IConcurrentCrawlerRequester _requester;
         private readonly IRequestQueue<RequestUrl> _requestQueue;
+        private readonly ICustomProcessor _customProcessor;
         private readonly Channel<CrawlerResult> _resultsChannel = Channel.CreateUnbounded<CrawlerResult>();
         public ChannelReader<CrawlerResult> ResultsChannelReader => _resultsChannel.Reader;
         private readonly IConcurrentUrlStore _urlStore = new ConcurrentUrlStore();
@@ -68,10 +74,11 @@ namespace AngleCrawler
         private long _requestCount = 0;
         private long _activeWorkers = 0;
 
-        public Crawler(CrawlerConfig config, IConcurrentCrawlerRequester requester, IRequestQueue<RequestUrl> requestQueue, CancellationToken cancellationToken) {
+        public Crawler(CrawlerConfig config, IConcurrentCrawlerRequester requester, IRequestQueue<RequestUrl> requestQueue, ICustomProcessor customProcessor, CancellationToken cancellationToken) {
             _config = config;
             _requester = requester;
             _requestQueue = requestQueue;
+            _customProcessor = customProcessor;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _excludeFilters = config.ExcludeFilters.Select(x => new PseudoUrl(x)).ToArray();
         }
@@ -238,6 +245,8 @@ namespace AngleCrawler
                 }
                 node.Html = doc.Source.Text;
             }
+
+            if(_customProcessor != null) await _customProcessor.ProcessAsync(doc, node, edges);
 
             return (node, edges);
         }
