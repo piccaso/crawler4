@@ -72,21 +72,28 @@ namespace AngleCrawlerCli
             var crawlerTask = crawler.CrawlAsync();
             await crawler.EnqueueAsync(baseUrl);
             crawler.OnStatus += OnStatusAction;
-
+            Sw.Start();
             await Task.WhenAll(consumerTask, crawlerTask);
         }
 
         private static long _peakAllocatedBytes;
 
         private static void OnStatusAction((long channelSize, long activeWorkers, long requestCount) args) {
+            TimeSpan? tr;
+            try {
+                tr = (Sw.Elapsed / args.requestCount) * args.channelSize;
+            }
+            catch {
+                tr = null;
+            }
             var ab = GC.GetTotalMemory(true);
             if (ab > _peakAllocatedBytes) _peakAllocatedBytes = ab;
-            Console.WriteLine($"q:{args.channelSize}, w:{args.activeWorkers}, cnt:{args.requestCount} ab:{FormatBytes(ab)}");
+            Console.WriteLine($"q:{args.channelSize}, w:{args.activeWorkers}, cnt:{args.requestCount} ab:{FormatBytes(ab)} tr:{tr}");
         }
 
+        private static readonly Stopwatch Sw = new Stopwatch();
+
         static async Task ConsumeCrawlerResultsAsync(ChannelReader<CrawlerResult> results) {
-            var sw = new Stopwatch();
-            sw.Start();
             var cnt = 0;
             await foreach (var r in results.ReadAllAsync()) {
                 //if (Debugger.IsAttached && node.Url.Contains("facebook.com")) {
@@ -112,11 +119,11 @@ namespace AngleCrawlerCli
 
                 cnt++;
             }
-            sw.Stop();
+            Sw.Stop();
 
             Console.WriteLine($"Pages Crawled: {cnt}");
-            Console.WriteLine($"Elapsed Time: {sw.Elapsed}");
-            Console.WriteLine($"Pages Crawled/Minute: {cnt / sw.Elapsed.TotalMinutes}");
+            Console.WriteLine($"Elapsed Time: {Sw.Elapsed}");
+            Console.WriteLine($"Pages Crawled/Minute: {cnt / Sw.Elapsed.TotalMinutes}");
             PrintMemoryStatistics();
         }
 
