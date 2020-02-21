@@ -34,6 +34,7 @@ namespace AngleCrawler
     public class CrawlerNode {
         public string Url { get; set; }
         public int Status { get; set; }
+        public string Title { get; set; }
         public string Html { get; set; }
         public bool External { get; set; }
         public string Error { get; set; }
@@ -70,6 +71,7 @@ namespace AngleCrawler
         private readonly IConcurrentUrlStore _urlStore = new ConcurrentUrlStore();
         private readonly CancellationTokenSource _cts;
         private readonly PseudoUrl[] _excludeFilters;
+        private readonly PseudoUrl _pseudoUrl;
 
         private long _requestCount = 0;
         private long _activeWorkers = 0;
@@ -81,6 +83,7 @@ namespace AngleCrawler
             _customProcessor = customProcessor;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _excludeFilters = config.ExcludeFilters.Select(x => new PseudoUrl(x)).ToArray();
+            _pseudoUrl = new PseudoUrl(_config.UrlFilter);
         }
 
         public Task<bool> EnqueueAsync(string url, string referrer = null) {
@@ -172,18 +175,16 @@ namespace AngleCrawler
         }
 
         private async Task ProcessUrlAsync(RequestUrl requestUrl) {
-            var pseudoUrl = new PseudoUrl(_config.UrlFilter);
             using var timeout = new CancellationTokenSource(_config.RequesterTimeout);
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, _cts.Token);
             try
             {
                 var (node, edges) = await Try.HarderAsync(_config.Retries, () => ProcessRequestAsync(requestUrl, cts.Token), _config.DelayBetweenRetries, cts.Token);
-                node.External = !pseudoUrl.Match(node.Url);
                 Interlocked.Increment(ref _requestCount);
                 await WriteResultAsync(node, edges);
                 foreach (var edge in edges) {
-                    var childExternal = !pseudoUrl.Match(edge.Child);
-                    var parentExternal = !pseudoUrl.Match(edge.Parent);
+                    var childExternal = !_pseudoUrl.Match(edge.Child);
+                    var parentExternal = !_pseudoUrl.Match(edge.Parent);
                     var takeIt = false;
 
                     if (!childExternal && !parentExternal && _config.FollowInternalLinks) {
@@ -202,7 +203,7 @@ namespace AngleCrawler
                 var node = new CrawlerNode {
                     Url = requestUrl.Url,
                     Status = (int) HttpStatusCode.GatewayTimeout,
-                    External = !pseudoUrl.Match(requestUrl.Url),
+                    External = !_pseudoUrl.Match(requestUrl.Url),
                     Error = e.Message,
                 };
                 var edges = new List<CrawlerEdge>();
@@ -244,9 +245,11 @@ namespace AngleCrawler
                     }
                 }
                 node.Html = doc.Source.Text;
+                node.Title = doc.QuerySelector("title")?.TextContent?.Trim();
             }
+            node.External = !_pseudoUrl.Match(node.Url);
 
-            if(_customProcessor != null) await _customProcessor.ProcessAsync(doc, node, edges);
+            if (_customProcessor != null) await _customProcessor.ProcessAsync(doc, node, edges);
 
             return (node, edges);
         }
